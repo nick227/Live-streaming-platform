@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAdminCreator } from '@streamyolo/sdk'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Button } from '@/components/ui/Button'
@@ -8,6 +8,7 @@ import { Coins, Radio } from 'lucide-react'
 
 export function AdminCreatorPage() {
   const { creatorId } = useParams<{ creatorId: string }>()
+  const navigate = useNavigate()
   const { data, isLoading } = useAdminCreator(creatorId!)
 
   if (isLoading) return <Skeleton className="h-64 w-full" />
@@ -17,6 +18,9 @@ export function AdminCreatorPage() {
 
   return (
     <div className="space-y-6">
+      <button onClick={() => navigate('/admin/creators')} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        ← Creators
+      </button>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">{creator.displayName}</h1>

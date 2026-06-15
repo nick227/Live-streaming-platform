@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAdminRoom } from '@streamyolo/sdk'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Button } from '@/components/ui/Button'
@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/Avatar'
 
 export function AdminRoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
+  const navigate = useNavigate()
   const { data, isLoading } = useAdminRoom(roomId!)
 
   if (isLoading) return <Skeleton className="h-64 w-full" />
@@ -17,6 +18,9 @@ export function AdminRoomPage() {
 
   return (
     <div className="space-y-6">
+      <button onClick={() => navigate('/admin/rooms')} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        ← Rooms
+      </button>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">{room.title}</h1>
@@ -64,7 +68,7 @@ export function AdminRoomPage() {
       </Card>
 
       <div className="flex gap-3">
-        <Button asChild variant="outline">
+        <Button asChild variant="destructive">
           <Link to={`/admin/rooms/${roomId}/end`}>End Room</Link>
         </Button>
         <Button asChild variant="outline">

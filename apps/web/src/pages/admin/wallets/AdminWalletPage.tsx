@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAdminWallet } from '@streamyolo/sdk'
 import { LedgerList } from '@/components/wallet/LedgerList'
 import { Button } from '@/components/ui/Button'
@@ -8,6 +8,7 @@ import { Coins } from 'lucide-react'
 
 export function AdminWalletPage() {
   const { userId } = useParams<{ userId: string }>()
+  const navigate = useNavigate()
   const { data, isLoading } = useAdminWallet(userId!)
 
   if (isLoading) return (
@@ -25,6 +26,9 @@ export function AdminWalletPage() {
 
   return (
     <div className="space-y-6">
+      <button onClick={() => navigate('/admin/users')} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        ← Users
+      </button>
       <div className="flex items-start justify-between gap-4">
         <h1 className="text-xl font-semibold">Wallet</h1>
         <Button asChild size="sm">

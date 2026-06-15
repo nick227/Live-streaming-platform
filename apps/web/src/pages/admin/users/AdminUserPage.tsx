@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAdminUser } from '@streamyolo/sdk'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Button } from '@/components/ui/Button'
@@ -8,6 +8,7 @@ import { Coins } from 'lucide-react'
 
 export function AdminUserPage() {
   const { userId } = useParams<{ userId: string }>()
+  const navigate = useNavigate()
   const { data, isLoading } = useAdminUser(userId!)
 
   if (isLoading) return <Skeleton className="h-64 w-full" />
@@ -19,6 +20,9 @@ export function AdminUserPage() {
 
   return (
     <div className="space-y-6">
+      <button onClick={() => navigate('/admin/users')} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        ← Users
+      </button>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">{user.displayName}</h1>
@@ -70,7 +74,7 @@ export function AdminUserPage() {
         <Button asChild variant="outline">
           <Link to={`/admin/wallets/${userId}`}>View Wallet</Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="destructive">
           <Link to={`/admin/users/${userId}/suspend`}>Suspend</Link>
         </Button>
         <Button asChild variant="outline">

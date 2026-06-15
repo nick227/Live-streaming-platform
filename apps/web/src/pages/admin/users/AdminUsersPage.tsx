@@ -32,8 +32,8 @@ export function AdminUsersPage() {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <StatusBadge status={user.status} />
-            <Link to={`/admin/users/${user.id}/suspend`} className="text-xs text-muted-foreground hover:text-foreground">Suspend</Link>
-            <Link to={`/admin/users/${user.id}/restore`} className="text-xs text-muted-foreground hover:text-foreground">Restore</Link>
+            <Link to={`/admin/users/${user.id}/suspend`} className="text-xs text-muted-foreground hover:text-destructive transition-colors">Suspend</Link>
+            <Link to={`/admin/users/${user.id}/restore`} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Restore</Link>
           </div>
         </div>
       )}

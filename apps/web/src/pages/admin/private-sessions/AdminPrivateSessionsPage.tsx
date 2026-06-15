@@ -28,7 +28,7 @@ export function AdminPrivateSessionsPage() {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <StatusBadge status={session.status} />
-            <Link to={`/admin/private-sessions/${session.id}/force-end`} className="text-xs text-muted-foreground hover:text-foreground">
+            <Link to={`/admin/private-sessions/${session.id}/force-end`} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
               Force end
             </Link>
           </div>

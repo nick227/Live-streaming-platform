@@ -23,12 +23,12 @@ export function AdminCreatorsPage() {
               {creator.user?.displayName ?? 'Creator'}
               {creator.isLive && <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />}
             </Link>
-            <p className="text-xs text-muted-foreground">{creator.userId?.slice(0, 8)}</p>
+            <p className="text-xs text-muted-foreground">Joined {new Date(creator.createdAt).toLocaleDateString()}</p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <StatusBadge status={creator.status} />
-            <Link to={`/admin/creators/${creator.id}/approve`} className="text-xs text-muted-foreground hover:text-foreground">Approve</Link>
-            <Link to={`/admin/creators/${creator.id}/suspend`} className="text-xs text-muted-foreground hover:text-foreground">Suspend</Link>
+            <Link to={`/admin/creators/${creator.id}/approve`} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Approve</Link>
+            <Link to={`/admin/creators/${creator.id}/suspend`} className="text-xs text-muted-foreground hover:text-destructive transition-colors">Suspend</Link>
           </div>
         </div>
       )}

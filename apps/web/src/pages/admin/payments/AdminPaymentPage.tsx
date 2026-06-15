@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useAdminPayment } from '@streamyolo/sdk'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Card, CardContent } from '@/components/ui/Card'
@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 
 export function AdminPaymentPage() {
   const { paymentId } = useParams<{ paymentId: string }>()
+  const navigate = useNavigate()
   const { data, isLoading } = useAdminPayment(paymentId!)
 
   if (isLoading) return <Skeleton className="h-64 w-full" />
@@ -15,6 +16,9 @@ export function AdminPaymentPage() {
 
   return (
     <div className="space-y-6">
+      <button onClick={() => navigate('/admin/payments')} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        ← Payments
+      </button>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">

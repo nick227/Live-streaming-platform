@@ -28,8 +28,8 @@ export function AdminRoomsPage() {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <StatusBadge status={room.status} />
-            <Link to={`/admin/rooms/${room.id}/end`} className="text-xs text-muted-foreground hover:text-foreground">End</Link>
-            <Link to={`/admin/rooms/${room.id}/hide`} className="text-xs text-muted-foreground hover:text-foreground">Hide</Link>
+            <Link to={`/admin/rooms/${room.id}/end`} className="text-xs text-muted-foreground hover:text-destructive transition-colors">End</Link>
+            <Link to={`/admin/rooms/${room.id}/hide`} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Hide</Link>
           </div>
         </div>
       )}

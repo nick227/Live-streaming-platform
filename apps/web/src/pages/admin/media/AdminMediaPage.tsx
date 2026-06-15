@@ -29,8 +29,8 @@ export function AdminMediaPage() {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <StatusBadge status={asset.status} />
-            <Link to={`/admin/media/${asset.id}/approve`} className="text-xs text-muted-foreground hover:text-foreground">Approve</Link>
-            <Link to={`/admin/media/${asset.id}/hide`} className="text-xs text-muted-foreground hover:text-foreground">Hide</Link>
+            <Link to={`/admin/media/${asset.id}/approve`} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Approve</Link>
+            <Link to={`/admin/media/${asset.id}/hide`} className="text-xs text-muted-foreground hover:text-destructive transition-colors">Hide</Link>
           </div>
         </div>
       )}
