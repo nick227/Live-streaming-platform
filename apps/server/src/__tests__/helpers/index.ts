@@ -71,6 +71,8 @@ async function cleanupTestData() {
   await db.roomMenuItem.deleteMany()
   await db.roomGoal.deleteMany()
   await db.chatMessage.deleteMany()
+  await db.roomTagAssignment.deleteMany()
+  await db.creatorDefaultRoomTag.deleteMany()
   await db.room.deleteMany()
   await db.creatorMenuItem.deleteMany()
   await db.creatorProfile.deleteMany()
@@ -189,7 +191,16 @@ export async function createActiveCreator(userId: string = testUserId) {
 export async function createRoom(creatorOrUserId: string) {
   let creator = await db.creatorProfile.findUnique({ where: { userId: creatorOrUserId } })
   if (!creator) creator = await db.creatorProfile.findUniqueOrThrow({ where: { id: creatorOrUserId } })
-  return db.room.create({ data: { creatorId: creator.id, title: 'Test Room', slug: `test-room-${Math.random()}`, livekitRoomName: `lk-${Math.random()}` } })
+  return db.room.create({
+    data: {
+      creatorId: creator.id,
+      title: 'Test Room',
+      slug: `test-room-${Math.random()}`,
+      livekitRoomName: `lk-${Math.random()}`,
+      category: 'FEMALE',
+      countryCode: 'US',
+    },
+  })
 }
 
 export async function createLiveRoom(creatorOrUserId: string) {
@@ -203,6 +214,8 @@ export async function createLiveRoom(creatorOrUserId: string) {
       livekitRoomName: `lk-live-${Math.random()}`,
       status: 'LIVE',
       thumbnailMediaId: 'dummy-media',
+      category: 'FEMALE',
+      countryCode: 'US',
     }
   })
 }

@@ -12,12 +12,23 @@ describe('prepareRoom', () => {
 
   it('POST /creator/rooms/prepare', async () => {
     await createTestCreator(testUserId)
+    await db.roomTag.upsert({
+      where: { slug: 'gaming' },
+      update: { label: 'Gaming', isActive: true },
+      create: { slug: 'gaming', label: 'Gaming', group: 'activity', sortOrder: 1 },
+    })
     const media = await createMediaAsset(testUserId)
     const res = await app.inject({
       method: 'POST',
       url: '/creator/rooms/prepare',
       headers: asAuth(testUserId),
-      payload: { title: 'New Stream', thumbnailMediaId: media.id },
+      payload: {
+        title: 'New Stream',
+        thumbnailMediaId: media.id,
+        category: 'FEMALE',
+        countryCode: 'US',
+        tagSlugs: ['gaming'],
+      },
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('prepareRoom', 200, res.json())
@@ -36,7 +47,7 @@ describe('goLive', () => {
       data: { creatorId: creator.id, label: 'Shoutout', tokenAmount: 50, isActive: true }
     })
     const room = await db.room.create({
-      data: { creatorId: creator.id, title: 'Prepared Room', slug: 'prepared-room', livekitRoomName: 'room-123', thumbnailMediaId: 'media-123' },
+      data: { creatorId: creator.id, title: 'Prepared Room', slug: 'prepared-room', livekitRoomName: 'room-123', thumbnailMediaId: 'media-123', category: 'FEMALE', countryCode: 'US' },
     })
 
     const res = await app.inject({

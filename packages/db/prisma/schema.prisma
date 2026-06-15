@@ -46,6 +46,13 @@ enum RoomVisibility {
   UNLISTED
 }
 
+enum RoomCategory {
+  MALE
+  FEMALE
+  COUPLES
+  TRANS
+}
+
 enum PaymentProvider {
   CCBILL
 }
@@ -291,6 +298,10 @@ model CreatorProfile {
   moderationActions RoomModerationAction[]
   userBans          CreatorUserBan[]
   userRewards       CreatorUserReward[]
+  defaultRoomTags   CreatorDefaultRoomTag[]
+
+  defaultRoomCategory RoomCategory?
+  defaultCountryCode  String?       @db.Char(2)
 
   @@index([userId])
   @@index([status])
@@ -325,11 +336,55 @@ model Room {
   reports         Report[]         @relation("RoomReports")
   chatSettings    RoomChatSettings?
   moderationActions RoomModerationAction[]
+  tags            RoomTagAssignment[]
+
+  category    RoomCategory?
+  countryCode String?       @db.Char(2)
 
   @@index([creatorId])
   @@index([status])
   @@index([slug])
   @@index([createdAt])
+  @@index([status, visibility, category])
+  @@index([status, visibility, countryCode])
+}
+
+model RoomTag {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  label     String
+  group     String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  rooms           RoomTagAssignment[]
+  creatorDefaults CreatorDefaultRoomTag[]
+
+  @@index([isActive, sortOrder])
+  @@index([group])
+}
+
+model RoomTagAssignment {
+  roomId String
+  tagId  String
+
+  room Room    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  tag  RoomTag @relation(fields: [tagId], references: [id])
+
+  @@id([roomId, tagId])
+  @@index([tagId])
+}
+
+model CreatorDefaultRoomTag {
+  creatorId String
+  tagId     String
+
+  creator CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  tag     RoomTag        @relation(fields: [tagId], references: [id])
+
+  @@id([creatorId, tagId])
+  @@index([tagId])
 }
 
 model RoomGoal {

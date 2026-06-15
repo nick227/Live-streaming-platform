@@ -2,6 +2,8 @@
   "name": "@streamyolo/shared",
   "version": "0.0.1",
   "exports": {
-    ".": "./src/types/index.ts"
+    ".": "./src/types/index.ts",
+    "./iso-countries": "./src/iso-countries.ts",
+    "./room-taxonomy": "./src/room-taxonomy.ts"
   }
 }

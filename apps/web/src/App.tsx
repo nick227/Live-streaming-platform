@@ -72,6 +72,13 @@ export function App() {
           <Route element={<Shell />}>
           <Route index element={<Navigate to="/rooms" replace />} />
           <Route path="/rooms" element={<RoomsPage />} />
+          <Route path="/rooms/c/:categories" element={<RoomsPage />} />
+          <Route path="/rooms/country/:countries" element={<RoomsPage />} />
+          <Route path="/rooms/t/:tags" element={<RoomsPage />} />
+          <Route path="/rooms/c/:categories/country/:countries" element={<RoomsPage />} />
+          <Route path="/rooms/c/:categories/t/:tags" element={<RoomsPage />} />
+          <Route path="/rooms/country/:countries/t/:tags" element={<RoomsPage />} />
+          <Route path="/rooms/c/:categories/country/:countries/t/:tags" element={<RoomsPage />} />
           <Route path="/rooms/:slug" element={<RoomPage />} />
           <Route path="/creator/rooms/prepare" element={<PrepareRoomPage />} />
           <Route path="/creator/rooms/:roomId/go-live" element={<GoLivePage />} />

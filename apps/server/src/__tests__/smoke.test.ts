@@ -63,7 +63,9 @@ describe('Smoke Test - Room connection and lifecycle', () => {
       headers: asAuth(testUserId),
       payload: {
         title: 'Smoke Test Room',
-        thumbnailMediaId: 'test-media-id'
+        thumbnailMediaId: 'test-media-id',
+        category: 'FEMALE',
+        countryCode: 'US',
       }
     })
     expect(res.statusCode).toBe(200)

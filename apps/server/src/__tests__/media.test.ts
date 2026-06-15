@@ -33,7 +33,7 @@ describe('uploadMedia', () => {
 
   it('POST /media/upload', async () => {
     const form = multipartPayload(
-      [{ name: 'type', value: 'IMAGE' }],
+      [{ name: 'type', value: 'AVATAR' }],
       { name: 'file', filename: 'test.png', contentType: 'image/png', content: Buffer.from('fake image data') },
     )
 

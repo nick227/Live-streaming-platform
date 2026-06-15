@@ -275,9 +275,51 @@ components:
 
     # ── Rooms ─────────────────────────────────────────────────────────────────
 
+    RoomCategory:
+      type: string
+      enum: [MALE, FEMALE, COUPLES, TRANS]
+
+    RoomTagDto:
+      type: object
+      required: [slug, label]
+      properties:
+        slug: { type: string }
+        label: { type: string }
+        group:
+          type: string
+          nullable: true
+
+    RoomTaxonomy:
+      type: object
+      required: [categories, tags, countries, popularCountryCodes]
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            required: [value, label, slug]
+            properties:
+              value: { $ref: '#/components/schemas/RoomCategory' }
+              label: { type: string }
+              slug: { type: string }
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/RoomTagDto' }
+        countries:
+          type: array
+          items:
+            type: object
+            required: [code, name]
+            properties:
+              code: { type: string, minLength: 2, maxLength: 2 }
+              name: { type: string }
+        popularCountryCodes:
+          type: array
+          items: { type: string, minLength: 2, maxLength: 2 }
+
     RoomCard:
       type: object
-      required: [id, slug, title, status, visibility, creator, viewerCount, privateAvailable, createdAt]
+      required: [id, slug, title, status, visibility, creator, viewerCount, privateAvailable, tags, createdAt]
       properties:
         id: { type: string }
         slug: { type: string }
@@ -288,6 +330,21 @@ components:
         visibility:
           type: string
           enum: [PUBLIC, UNLISTED]
+        category:
+          type: string
+          nullable: true
+          description: MALE, FEMALE, COUPLES, or TRANS when set
+        countryCode:
+          type: string
+          minLength: 2
+          maxLength: 2
+          nullable: true
+        countryName:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/RoomTagDto' }
         creator: { $ref: '#/components/schemas/CreatorSummary' }
         thumbnailUrl:
           type: string
@@ -305,7 +362,7 @@ components:
 
     RoomDetail:
       type: object
-      required: [id, slug, title, status, visibility, creator, viewerCount, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, createdAt]
+      required: [id, slug, title, status, visibility, creator, viewerCount, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, tags, createdAt]
       properties:
         id: { type: string }
         slug: { type: string }
@@ -316,6 +373,21 @@ components:
         visibility:
           type: string
           enum: [PUBLIC, UNLISTED]
+        category:
+          type: string
+          nullable: true
+          description: MALE, FEMALE, COUPLES, or TRANS when set
+        countryCode:
+          type: string
+          minLength: 2
+          maxLength: 2
+          nullable: true
+        countryName:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/RoomTagDto' }
         creator: { $ref: '#/components/schemas/CreatorSummary' }
         thumbnailUrl:
           type: string
@@ -356,6 +428,15 @@ components:
           enum: [PUBLIC, UNLISTED]
         thumbnailMediaId: { type: string }
         coverMediaId: { type: string }
+        category: { $ref: '#/components/schemas/RoomCategory' }
+        countryCode: { type: string, minLength: 2, maxLength: 2 }
+        tagSlugs:
+          type: array
+          items: { type: string }
+          maxItems: 10
+        saveAsDefaults:
+          type: boolean
+          default: true
 
     GoLiveEligibility:
       type: object
@@ -370,6 +451,8 @@ components:
               - CREATOR_NOT_APPROVED
               - ROOM_THUMBNAIL
               - ROOM_TITLE
+              - ROOM_CATEGORY
+              - ROOM_COUNTRY
               - PRIVATE_RULES_TEXT
               - PRIVATE_RATE
               - TIP_MENU
@@ -999,6 +1082,30 @@ paths:
         - in: query
           name: status
           schema: { type: string, enum: [LIVE, ENDED] }
+        - in: query
+          name: category
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/RoomCategory' }
+          style: form
+          explode: true
+        - in: query
+          name: country
+          schema:
+            type: array
+            items: { type: string, minLength: 2, maxLength: 2 }
+          style: form
+          explode: true
+        - in: query
+          name: tag
+          schema:
+            type: array
+            items: { type: string }
+          style: form
+          explode: true
+        - in: query
+          name: q
+          schema: { type: string }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1014,6 +1121,23 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/RoomCard' }
                   meta: { $ref: '#/components/schemas/PaginatedMeta' }
+
+  /rooms/taxonomy:
+    get:
+      operationId: getRoomTaxonomy
+      summary: Room browse taxonomy (categories, tags, countries)
+      security: []
+      tags: [rooms]
+      responses:
+        '200':
+          description: Taxonomy for room browse and prepare flows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/RoomTaxonomy' }
 
   /rooms/{slug}:
     get:
@@ -2175,6 +2299,7 @@ paths:
         content:
           multipart/form-data:
             schema:
+              nullable: true
               type: object
               required: [file, type]
               properties:
@@ -2219,6 +2344,7 @@ paths:
         content:
           multipart/form-data:
             schema:
+              nullable: true
               type: object
               required: [image]
               properties:

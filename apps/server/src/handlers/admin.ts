@@ -146,7 +146,7 @@ export async function adminEndRoom(request: any, reply: any) {
   })
   const io = (request.server as any).io
   if (io) io.to(`room:${room!.id}`).emit('room:ended', { roomId: room!.id, reason: 'admin_action' })
-  return reply.send({ data: { room: formatRoom(room) } })
+  return reply.send({ data: { room: formatRoom(room!) } })
 }
 
 export async function adminHideRoom(request: any, reply: any) {
@@ -155,7 +155,7 @@ export async function adminHideRoom(request: any, reply: any) {
     where: { id: updated.id },
     include: { creator: CREATOR_INCLUDE, goal: true },
   })
-  return reply.send({ data: { room: formatRoom(room) } })
+  return reply.send({ data: { room: formatRoom(room!) } })
 }
 
 // ── Users ────────────────────────────────────────────────────────────────────

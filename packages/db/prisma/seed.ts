@@ -497,6 +497,100 @@ async function seedMedia(users: Awaited<ReturnType<typeof seedUsers>>, profiles:
   return created
 }
 
+async function seedRoomTags() {
+  const tags = [
+    { slug: 'latina', label: 'Latina', group: 'ethnicity', sortOrder: 1 },
+    { slug: 'asian', label: 'Asian', group: 'ethnicity', sortOrder: 2 },
+    { slug: 'ebony', label: 'Ebony', group: 'ethnicity', sortOrder: 3 },
+    { slug: 'caucasian', label: 'Caucasian', group: 'ethnicity', sortOrder: 4 },
+    { slug: 'middle-eastern', label: 'Middle Eastern', group: 'ethnicity', sortOrder: 5 },
+    { slug: 'milf', label: 'MILF', group: 'ethnicity', sortOrder: 6 },
+    { slug: 'mature', label: 'Mature', group: 'ethnicity', sortOrder: 7 },
+    { slug: 'young-adult', label: 'Young Adult', group: 'ethnicity', sortOrder: 8 },
+    { slug: 'college-vibe', label: 'College Vibe', group: 'ethnicity', sortOrder: 9 },
+    { slug: 'new-model', label: 'New Model', group: 'ethnicity', sortOrder: 10 },
+    { slug: 'petite', label: 'Petite', group: 'body', sortOrder: 1 },
+    { slug: 'curvy', label: 'Curvy', group: 'body', sortOrder: 2 },
+    { slug: 'bbw', label: 'BBW', group: 'body', sortOrder: 3 },
+    { slug: 'athletic', label: 'Athletic', group: 'body', sortOrder: 4 },
+    { slug: 'tattooed', label: 'Tattooed', group: 'body', sortOrder: 5 },
+    { slug: 'interactive-toys', label: 'Interactive Toys', group: 'activity', sortOrder: 1 },
+    { slug: 'roleplay', label: 'Roleplay', group: 'activity', sortOrder: 2 },
+    { slug: 'asmr', label: 'ASMR', group: 'activity', sortOrder: 3 },
+    { slug: 'gaming', label: 'Gaming', group: 'activity', sortOrder: 4 },
+    { slug: 'fitness', label: 'Fitness', group: 'activity', sortOrder: 5 },
+    { slug: 'cooking', label: 'Cooking', group: 'activity', sortOrder: 6 },
+    { slug: 'english', label: 'English', group: 'language', sortOrder: 1 },
+    { slug: 'spanish', label: 'Spanish', group: 'language', sortOrder: 2 },
+    { slug: 'french', label: 'French', group: 'language', sortOrder: 3 },
+    { slug: 'german', label: 'German', group: 'language', sortOrder: 4 },
+    { slug: 'portuguese', label: 'Portuguese', group: 'language', sortOrder: 5 },
+  ]
+
+  const created: Record<string, { id: string; slug: string }> = {}
+  for (const tag of tags) {
+    const row = await db.roomTag.upsert({
+      where: { slug: tag.slug },
+      update: {
+        label: tag.label,
+        group: tag.group,
+        sortOrder: tag.sortOrder,
+        isActive: true,
+      },
+      create: tag,
+    })
+    created[tag.slug] = row
+  }
+  return created
+}
+
+async function seedRoomTaxonomy(
+  profiles: Awaited<ReturnType<typeof seedCreatorProfiles>>,
+  rooms: Awaited<ReturnType<typeof seedRooms>>,
+  tags: Record<string, { id: string; slug: string }>,
+) {
+  await db.creatorProfile.update({
+    where: { id: profiles.luna.id },
+    data: { defaultRoomCategory: 'FEMALE', defaultCountryCode: 'US' },
+  })
+  await db.creatorProfile.update({
+    where: { id: profiles.nova.id },
+    data: { defaultRoomCategory: 'COUPLES', defaultCountryCode: 'GB' },
+  })
+
+  await db.creatorDefaultRoomTag.createMany({
+    data: [
+      { creatorId: profiles.luna.id, tagId: tags.latina.id },
+      { creatorId: profiles.luna.id, tagId: tags['interactive-toys'].id },
+      { creatorId: profiles.luna.id, tagId: tags.english.id },
+      { creatorId: profiles.nova.id, tagId: tags.gaming.id },
+      { creatorId: profiles.nova.id, tagId: tags.english.id },
+    ],
+    skipDuplicates: true,
+  })
+
+  await db.room.update({
+    where: { id: rooms.lunaLive.id },
+    data: { category: 'FEMALE', countryCode: 'US' },
+  })
+  await db.room.update({
+    where: { id: rooms.novaLive.id },
+    data: { category: 'COUPLES', countryCode: 'GB' },
+  })
+
+  await db.roomTagAssignment.createMany({
+    data: [
+      { roomId: rooms.lunaLive.id, tagId: tags.latina.id },
+      { roomId: rooms.lunaLive.id, tagId: tags['interactive-toys'].id },
+      { roomId: rooms.lunaLive.id, tagId: tags.english.id },
+      { roomId: rooms.novaLive.id, tagId: tags.gaming.id },
+      { roomId: rooms.novaLive.id, tagId: tags.english.id },
+      { roomId: rooms.novaLive.id, tagId: tags.roleplay.id },
+    ],
+    skipDuplicates: true,
+  })
+}
+
 async function seedRooms(profiles: Awaited<ReturnType<typeof seedCreatorProfiles>>, media: Record<string, any>) {
   const rooms = {
     lunaLive: await db.room.upsert({
@@ -1191,7 +1285,9 @@ async function main() {
   const wallets = await seedWallets(users)
   const profiles = await seedCreatorProfiles(users)
   const media = await seedMedia(users, profiles)
+  const roomTags = await seedRoomTags()
   const rooms = await seedRooms(profiles, media)
+  await seedRoomTaxonomy(profiles, rooms, roomTags)
   const menus = await seedMenus(profiles, rooms)
   await seedGoals(rooms)
   const payments = await seedPayments(users)
@@ -1218,6 +1314,10 @@ async function main() {
   console.log('Demo room slugs:')
   console.log('  /rooms/luna-signal-live')
   console.log('  /rooms/nova-room-live')
+  console.log('Demo browse URLs:')
+  console.log('  /rooms/c/female')
+  console.log('  /rooms/c/couples/country/gb')
+  console.log('  /rooms/t/gaming')
 }
 
 main()

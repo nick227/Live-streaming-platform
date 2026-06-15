@@ -111,6 +111,9 @@ importers:
       '@streamyolo/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      '@streamyolo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@18.3.1)

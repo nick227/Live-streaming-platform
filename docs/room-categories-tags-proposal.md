@@ -363,12 +363,33 @@ Composite indexes on `(status, visibility, category)` and `(status, visibility, 
 
 ## Frontend Changes
 
+### Friendly browse URLs
+
+Room detail stays at `/rooms/:slug`. Browse filters use **reserved path segments** so they never collide with room slugs:
+
+| Path | Meaning |
+| --- | --- |
+| `/rooms` | All live public rooms |
+| `/rooms/c/female` | Category filter |
+| `/rooms/c/female+couples` | Multiple categories (OR) |
+| `/rooms/country/us` | Country filter |
+| `/rooms/country/us+gb` | Multiple countries (OR) |
+| `/rooms/t/latina` | Tag filter |
+| `/rooms/t/latina+gaming` | Multiple tags (OR) |
+| `/rooms/c/female/country/us` | Combined filters |
+| `/rooms/c/female/country/us/t/latina` | Full combined filters |
+| `/rooms?q=synth` | Title search (query param only) |
+
+Implementation: `apps/web/src/lib/roomBrowseRoutes.ts` provides `parseBrowsePath`, `buildBrowsePath`, and `browseFiltersToQuery`. Filter changes call `navigate(buildBrowsePath(...))`. Legacy `?category=FEMALE&country=US` URLs redirect to friendly paths on load.
+
+API `listRooms` still uses query params (`category`, `country`, `tag`); the web layer maps friendly paths → API query.
+
 ### `RoomsPage` — filter bar
 
 - Category **multi-select** chips (not single tab): e.g. Female + Couples together
 - Country multi-select: **popular countries first**, full ISO list searchable below
 - Tag multi-select (grouped by `group`, searchable)
-- Persist filter state in URL query string (`?category=FEMALE&category=COUPLES&country=US&tag=latina`) — survives refresh
+- Persist filter state in friendly URL paths (see above); title search uses `?q=`
 - Call `useRooms({ category, country, tag, q })`
 
 ### `PrepareRoomPage` — taxonomy section
