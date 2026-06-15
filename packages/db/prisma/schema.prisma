@@ -1,0 +1,550 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  VIEWER
+  CREATOR
+  ADMIN
+  MODERATOR // reserved for future use
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum CreatorStatus {
+  DRAFT
+  PENDING
+  ACTIVE
+  PAUSED
+  SUSPENDED
+  BANNED
+}
+
+enum RoomStatus {
+  DRAFT
+  LIVE
+  ENDED
+  SUSPENDED
+  HIDDEN
+}
+
+enum RoomVisibility {
+  PUBLIC
+  UNLISTED
+}
+
+enum PaymentProvider {
+  CCBILL
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  FAILED
+  REFUNDED
+  CHARGEBACK
+  MANUAL_REVIEW
+}
+
+enum LedgerEntryType {
+  TOKEN_PURCHASE
+  TIP_SENT
+  TIP_RECEIVED
+  PRIVATE_SESSION_HOLD
+  PRIVATE_SESSION_CAPTURE
+  PRIVATE_SESSION_RELEASE
+  REFUND_REVERSAL
+  CHARGEBACK_REVERSAL
+  ADMIN_ADJUSTMENT
+}
+
+enum ChatMessageType {
+  USER_MESSAGE
+  CREATOR_MESSAGE
+  SYSTEM_MESSAGE
+  AUTO_MESSAGE
+  TIP_EVENT
+  MENU_EVENT
+  GOAL_EVENT
+  PRIVATE_REQUEST
+  MODERATION_EVENT
+}
+
+enum TipRequestType {
+  GENERAL
+  MENU_ITEM
+  CUSTOM
+  GOAL
+}
+
+enum TipStatus {
+  SENT
+  ACKNOWLEDGED
+  COMPLETED
+  DECLINED
+  REVERSED
+}
+
+enum PrivateSessionStatus {
+  REQUESTED
+  ACCEPTED
+  DECLINED
+  ACTIVE
+  ENDED
+  CANCELLED
+  EXPIRED
+  FORCE_ENDED
+}
+
+enum MediaAssetType {
+  AVATAR
+  LOGO
+  ROOM_COVER
+  ROOM_THUMBNAIL_CAPTURE
+  BANNER
+}
+
+enum MediaAssetStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REMOVED
+  HIDDEN
+}
+
+enum MediaAssetSource {
+  UPLOADED
+  CREATOR_CAPTURED
+}
+
+enum ReportTargetType {
+  USER
+  ROOM
+  MESSAGE
+  MEDIA
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  ACTIONED
+  DISMISSED
+}
+
+// ─────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  passwordHash    String
+  username        String     @unique
+  displayName     String?
+  role            UserRole   @default(VIEWER)
+  status          UserStatus @default(ACTIVE)
+  ageVerifiedAt   DateTime?
+  emailVerifiedAt DateTime?
+  suspendedAt     DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  sessions            Session[]
+  wallet              Wallet?
+  creatorProfile      CreatorProfile?
+  tipsFrom            Tip[]               @relation("TipFrom")
+  privateSessions     PrivateSession[]    @relation("PrivateSessionViewer")
+  paymentTransactions PaymentTransaction[]
+  mediaAssets         MediaAsset[]
+  chatMessages        ChatMessage[]
+  reportsSubmitted    Report[]            @relation("ReportsSubmitted")
+  adminActionsBy      AdminAction[]       @relation("AdminActionsBy")
+  adminActionsTarget  AdminAction[]       @relation("AdminActionsTarget")
+  reviewedReports     Report[]            @relation("ReportsReviewed")
+
+  @@index([email])
+  @@index([username])
+  @@index([role])
+  @@index([status])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Wallet {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  tokenBalance            Int      @default(0)
+  reservedTokenBalance    Int      @default(0)
+  lifetimePurchasedTokens Int      @default(0)
+  lifetimeSpentTokens     Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user          User          @relation(fields: [userId], references: [id])
+  ledgerEntries LedgerEntry[]
+
+  @@index([userId])
+}
+
+// Append-only; no updatedAt by design — ledger entries are immutable
+model LedgerEntry {
+  id                   String          @id @default(cuid())
+  walletId             String
+  userId               String
+  type                 LedgerEntryType
+  amountTokens         Int
+  balanceAfter         Int
+  roomId               String?
+  tipId                String?
+  privateSessionId     String?
+  paymentTransactionId String?
+  adminActionId        String?
+  description          String?         @db.Text
+  metadataJson         Json?
+  createdAt            DateTime        @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId, createdAt])
+  @@index([userId, createdAt])
+  @@index([paymentTransactionId])
+  @@index([adminActionId])
+}
+
+model CreatorProfile {
+  id                        String        @id @default(cuid())
+  userId                    String        @unique
+  stageName                 String
+  bio                       String?       @db.Text
+  avatarMediaId             String?
+  logoMediaId               String?
+  bannerMediaId             String?
+  status                    CreatorStatus @default(DRAFT)
+  isLive                    Boolean       @default(false)
+  currentRoomId             String?
+  // Structured private session defaults (copied to PrivateSession at accept time)
+  privateRateTokensPerMinute Int          @default(0)
+  minPrivateMinutes         Int           @default(1)
+  privateViewerCamRequired  Boolean       @default(false)
+  privateScreenShareAllowed Boolean       @default(false)
+  privateRulesText          String?       @db.Text
+  payoutStatus              String        @default("DISABLED")
+  pendingTokenBalance       Int           @default(0)
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+
+  user        User              @relation(fields: [userId], references: [id])
+  rooms       Room[]
+  menuItems   CreatorMenuItem[]
+  tipsTo      Tip[]             @relation("TipTo")
+  privateSessions PrivateSession[] @relation("PrivateSessionCreator")
+
+  @@index([userId])
+  @@index([status])
+  @@index([isLive])
+}
+
+model Room {
+  id              String         @id @default(cuid())
+  creatorId       String
+  title           String
+  slug            String         @unique
+  status          RoomStatus     @default(DRAFT)
+  visibility      RoomVisibility @default(PUBLIC)
+  livekitRoomName String         @unique
+  // thumbnailMediaId is required for go-live; coverMediaId is optional fallback
+  thumbnailMediaId String?
+  coverMediaId    String?
+  viewerCount     Int            @default(0)
+  startedAt       DateTime?
+  endedAt         DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  creator         CreatorProfile   @relation(fields: [creatorId], references: [id])
+  messages        ChatMessage[]
+  menuItems       RoomMenuItem[]
+  tips            Tip[]
+  goal            RoomGoal?
+  privateSessions PrivateSession[]
+  mediaAssets     MediaAsset[]     @relation("RoomMedia")
+  adminActions    AdminAction[]    @relation("AdminActionsRoom")
+  reports         Report[]         @relation("RoomReports")
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([slug])
+  @@index([createdAt])
+}
+
+model RoomGoal {
+  id            String   @id @default(cuid())
+  roomId        String   @unique
+  title         String
+  targetTokens  Int
+  currentTokens Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  room Room @relation(fields: [roomId], references: [id])
+}
+
+model ChatMessage {
+  id               String          @id @default(cuid())
+  roomId           String
+  userId           String?
+  type             ChatMessageType
+  body             String          @db.Text
+  tipId            String?
+  privateSessionId String?
+  metadataJson     Json?
+  createdAt        DateTime        @default(now())
+  deletedAt        DateTime?
+
+  room    Room    @relation(fields: [roomId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
+  reports Report[] @relation("MessageReports")
+
+  @@index([roomId, createdAt])
+  @@index([userId])
+}
+
+model CreatorMenuItem {
+  id          String   @id @default(cuid())
+  creatorId   String
+  label       String
+  description String?  @db.Text
+  tokenAmount Int
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator    CreatorProfile @relation(fields: [creatorId], references: [id])
+  roomItems  RoomMenuItem[]
+  tips       Tip[]
+
+  @@index([creatorId])
+}
+
+model RoomMenuItem {
+  id                      String   @id @default(cuid())
+  roomId                  String
+  sourceCreatorMenuItemId String?
+  label                   String
+  description             String?  @db.Text
+  tokenAmount             Int
+  isActive                Boolean  @default(true)
+  sortOrder               Int      @default(0)
+
+  room                  Room             @relation(fields: [roomId], references: [id])
+  sourceCreatorMenuItem CreatorMenuItem? @relation(fields: [sourceCreatorMenuItemId], references: [id])
+  tips                  Tip[]
+
+  @@index([roomId])
+}
+
+model TokenPack {
+  id               String   @id @default(cuid())
+  name             String
+  priceCents       Int
+  tokenAmount      Int
+  bonusTokenAmount Int      @default(0)
+  currency         String   @default("USD")
+  isActive         Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  paymentTransactions PaymentTransaction[]
+
+  @@index([isActive])
+}
+
+model PaymentTransaction {
+  id                 String          @id @default(cuid())
+  userId             String
+  tokenPackId        String
+  provider           PaymentProvider
+  providerTxnId      String?         @unique
+  providerCustomerId String?
+  status             PaymentStatus   @default(PENDING)
+  amountCents        Int
+  currency           String          @default("USD")
+  tokensCredited     Int             @default(0)
+  checkoutUrl        String?         @db.Text
+  rawProviderJson    Json?
+  approvedAt         DateTime?
+  failedAt           DateTime?
+  refundedAt         DateTime?
+  chargebackAt       DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id])
+  tokenPack TokenPack @relation(fields: [tokenPackId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([providerTxnId])
+  @@index([status])
+}
+
+model Tip {
+  id             String         @id @default(cuid())
+  roomId         String
+  fromUserId     String
+  toCreatorId    String
+  amountTokens   Int
+  requestType    TipRequestType
+  menuItemId     String?
+  roomMenuItemId String?
+  requestText    String?
+  status         TipStatus      @default(SENT)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  room         Room             @relation(fields: [roomId], references: [id])
+  fromUser     User             @relation("TipFrom", fields: [fromUserId], references: [id])
+  toCreator    CreatorProfile   @relation("TipTo", fields: [toCreatorId], references: [id])
+  menuItem     CreatorMenuItem? @relation(fields: [menuItemId], references: [id])
+  roomMenuItem RoomMenuItem?    @relation(fields: [roomMenuItemId], references: [id])
+
+  @@index([roomId, createdAt])
+  @@index([fromUserId])
+  @@index([toCreatorId])
+}
+
+model PrivateSession {
+  id                  String               @id @default(cuid())
+  creatorId           String
+  viewerId            String
+  publicRoomId        String
+  status              PrivateSessionStatus @default(REQUESTED)
+  rateTokensPerMinute Int
+  minMinutes          Int
+  // Structured rules captured at request time from creator's current profile
+  viewerCamRequired   Boolean              @default(false)
+  screenShareAllowed  Boolean              @default(false)
+  rulesText           String?              @db.Text
+  reservedTokens      Int                  @default(0)
+  capturedTokens      Int                  @default(0)
+  releasedTokens      Int                  @default(0)
+  livekitRoomName     String?
+  requestedAt         DateTime             @default(now())
+  acceptedAt          DateTime?
+  startedAt           DateTime?
+  endedAt             DateTime?
+  declineReason       String?              @db.Text
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  creator    CreatorProfile @relation("PrivateSessionCreator", fields: [creatorId], references: [id])
+  viewer     User           @relation("PrivateSessionViewer", fields: [viewerId], references: [id])
+  publicRoom Room           @relation(fields: [publicRoomId], references: [id])
+
+  @@index([creatorId, status])
+  @@index([viewerId, status])
+  @@index([publicRoomId])
+}
+
+model MediaAsset {
+  id            String           @id @default(cuid())
+  ownerUserId   String
+  creatorId     String?
+  roomId        String?
+  type          MediaAssetType
+  url           String           @db.Text
+  blurhash      String?
+  dominantColor String?
+  status        MediaAssetStatus @default(PENDING)
+  source        MediaAssetSource @default(UPLOADED)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  owner   User    @relation(fields: [ownerUserId], references: [id])
+  room    Room?   @relation("RoomMedia", fields: [roomId], references: [id])
+  reports Report[] @relation("MediaReports")
+
+  @@index([ownerUserId])
+  @@index([creatorId])
+  @@index([roomId])
+  @@index([status])
+  @@index([type])
+}
+
+model Report {
+  id              String           @id @default(cuid())
+  reporterId      String
+  targetType      ReportTargetType
+  targetUserId    String?
+  targetRoomId    String?
+  targetMessageId String?
+  targetMediaId   String?
+  reason          String
+  description     String?          @db.Text
+  status          ReportStatus     @default(PENDING)
+  reviewedAt      DateTime?
+  reviewedById    String?
+  adminNotes      String?          @db.Text
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  reporter      User         @relation("ReportsSubmitted", fields: [reporterId], references: [id])
+  reviewedBy    User?        @relation("ReportsReviewed", fields: [reviewedById], references: [id])
+  targetRoom    Room?        @relation("RoomReports", fields: [targetRoomId], references: [id])
+  targetMessage ChatMessage? @relation("MessageReports", fields: [targetMessageId], references: [id])
+  targetMedia   MediaAsset?  @relation("MediaReports", fields: [targetMediaId], references: [id])
+
+  @@index([reporterId])
+  @@index([status, createdAt])
+  @@index([targetRoomId])
+  @@index([targetUserId])
+  @@index([targetMessageId])
+  @@index([targetMediaId])
+}
+
+model AdminAction {
+  id              String   @id @default(cuid())
+  adminUserId     String
+  targetUserId    String?
+  targetRoomId    String?
+  targetPaymentId String?
+  type            String
+  reason          String?  @db.Text
+  metadataJson    Json?
+  createdAt       DateTime @default(now())
+
+  admin      User  @relation("AdminActionsBy", fields: [adminUserId], references: [id])
+  targetUser User? @relation("AdminActionsTarget", fields: [targetUserId], references: [id])
+  targetRoom Room? @relation("AdminActionsRoom", fields: [targetRoomId], references: [id])
+
+  @@index([adminUserId, createdAt])
+  @@index([targetUserId])
+  @@index([type])
+}

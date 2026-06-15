@@ -1,0 +1,2479 @@
+openapi: 3.0.3
+info:
+  title: StreamYolo API
+  version: 0.0.1
+  description: Room-first live creator platform — rooms, tips, private sessions, tokens, CCBill.
+
+servers:
+  - url: http://localhost:3001
+    description: Local dev
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Session token — delivered via Set-Cookie on login; also accepted as Bearer header for native clients.
+
+  # ─── Reusable parameters ───────────────────────────────────────────────────
+  parameters:
+    Cursor:
+      in: query
+      name: cursor
+      schema: { type: string }
+      description: Opaque pagination cursor from previous page.
+    Limit:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    SearchQuery:
+      in: query
+      name: q
+      schema: { type: string, minLength: 1, maxLength: 200 }
+
+  # ─── Reusable responses ────────────────────────────────────────────────────
+  responses:
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Insufficient role or ownership
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    UnprocessableEntity:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  # ─── Schemas ───────────────────────────────────────────────────────────────
+  schemas:
+
+    # ── Primitives ────────────────────────────────────────────────────────────
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        code: { type: string }
+
+    PaginatedMeta:
+      type: object
+      required: [hasMore, nextCursor]
+      properties:
+        hasMore: { type: boolean }
+        nextCursor:
+          type: string
+          nullable: true
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    # ── Users ─────────────────────────────────────────────────────────────────
+
+    PublicUser:
+      type: object
+      required: [id, username, role, status, createdAt]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        displayName:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [VIEWER, CREATOR, ADMIN, MODERATOR]
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED, DELETED]
+        createdAt: { type: string, format: date-time }
+
+    WalletSummary:
+      type: object
+      required: [tokenBalance, reservedTokenBalance, lifetimePurchasedTokens, lifetimeSpentTokens]
+      properties:
+        tokenBalance: { type: integer }
+        reservedTokenBalance: { type: integer }
+        lifetimePurchasedTokens: { type: integer }
+        lifetimeSpentTokens: { type: integer }
+
+    LedgerEntryDto:
+      type: object
+      required: [id, type, amountTokens, balanceAfter, createdAt]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum:
+            - TOKEN_PURCHASE
+            - TIP_SENT
+            - TIP_RECEIVED
+            - PRIVATE_SESSION_HOLD
+            - PRIVATE_SESSION_CAPTURE
+            - PRIVATE_SESSION_RELEASE
+            - REFUND_REVERSAL
+            - CHARGEBACK_REVERSAL
+            - ADMIN_ADJUSTMENT
+        amountTokens: { type: integer }
+        balanceAfter: { type: integer }
+        description:
+          type: string
+          nullable: true
+        roomId:
+          type: string
+          nullable: true
+        tipId:
+          type: string
+          nullable: true
+        privateSessionId:
+          type: string
+          nullable: true
+        paymentTransactionId:
+          type: string
+          nullable: true
+        adminActionId:
+          type: string
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+
+    RegisterInput:
+      type: object
+      required: [email, password, username]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        username: { type: string, minLength: 3, maxLength: 30, pattern: '^[a-zA-Z0-9_]+$' }
+        displayName: { type: string, minLength: 1, maxLength: 50 }
+        role:
+          type: string
+          enum: [VIEWER, CREATOR]
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    MeResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [user]
+          properties:
+            user: { $ref: '#/components/schemas/PublicUser' }
+            wallet:
+              type: object
+              allOf:
+                - { $ref: '#/components/schemas/WalletSummary' }
+              nullable: true
+            creatorProfile:
+              type: object
+              allOf:
+                - { $ref: '#/components/schemas/CreatorProfileSummary' }
+              nullable: true
+
+    # ── Creator ───────────────────────────────────────────────────────────────
+
+    CreatorSummary:
+      type: object
+      required: [id, userId, stageName, isLive]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        username: { type: string }
+        stageName: { type: string }
+        avatarUrl:
+          type: string
+          nullable: true
+        isLive: { type: boolean }
+        status:
+          type: string
+          enum: [DRAFT, PENDING, ACTIVE, PAUSED, SUSPENDED, BANNED]
+
+    CreatorProfileSummary:
+      type: object
+      required: [id, userId, stageName, status, isLive]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        stageName: { type: string }
+        status:
+          type: string
+          enum: [DRAFT, PENDING, ACTIVE, PAUSED, SUSPENDED, BANNED]
+        isLive: { type: boolean }
+        pendingTokenBalance: { type: integer }
+
+    CreatorProfileDetail:
+      type: object
+      required: [id, userId, stageName, status, isLive, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, createdAt]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        stageName: { type: string }
+        bio:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        logoUrl:
+          type: string
+          nullable: true
+        bannerUrl:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [DRAFT, PENDING, ACTIVE, PAUSED, SUSPENDED, BANNED]
+        isLive: { type: boolean }
+        currentRoomId:
+          type: string
+          nullable: true
+        privateRateTokensPerMinute: { type: integer, minimum: 0 }
+        minPrivateMinutes: { type: integer, minimum: 1 }
+        privateViewerCamRequired: { type: boolean }
+        privateScreenShareAllowed: { type: boolean }
+        privateRulesText:
+          type: string
+          nullable: true
+        payoutStatus: { type: string }
+        pendingTokenBalance: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    UpdateCreatorProfileInput:
+      type: object
+      properties:
+        stageName: { type: string, minLength: 1, maxLength: 50 }
+        bio: { type: string, maxLength: 1000 }
+        privateRateTokensPerMinute: { type: integer, minimum: 0 }
+        minPrivateMinutes: { type: integer, minimum: 1 }
+        privateViewerCamRequired: { type: boolean }
+        privateScreenShareAllowed: { type: boolean }
+        privateRulesText: { type: string, maxLength: 2000 }
+
+    # ── Rooms ─────────────────────────────────────────────────────────────────
+
+    RoomCard:
+      type: object
+      required: [id, slug, title, status, visibility, creator, viewerCount, privateAvailable, createdAt]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        status:
+          type: string
+          enum: [DRAFT, LIVE, ENDED, SUSPENDED, HIDDEN]
+        visibility:
+          type: string
+          enum: [PUBLIC, UNLISTED]
+        creator: { $ref: '#/components/schemas/CreatorSummary' }
+        thumbnailUrl:
+          type: string
+          nullable: true
+        viewerCount: { type: integer }
+        privateAvailable: { type: boolean }
+        privateRateTokensPerMinute:
+          type: integer
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    RoomDetail:
+      type: object
+      required: [id, slug, title, status, visibility, creator, viewerCount, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, createdAt]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        status:
+          type: string
+          enum: [DRAFT, LIVE, ENDED, SUSPENDED, HIDDEN]
+        visibility:
+          type: string
+          enum: [PUBLIC, UNLISTED]
+        creator: { $ref: '#/components/schemas/CreatorSummary' }
+        thumbnailUrl:
+          type: string
+          nullable: true
+        coverUrl:
+          type: string
+          nullable: true
+        viewerCount: { type: integer }
+        privateRateTokensPerMinute: { type: integer }
+        minPrivateMinutes: { type: integer }
+        privateViewerCamRequired: { type: boolean }
+        privateScreenShareAllowed: { type: boolean }
+        privateRulesText:
+          type: string
+          nullable: true
+        goal:
+          type: object
+          allOf:
+            - { $ref: '#/components/schemas/RoomGoalDto' }
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    PrepareRoomInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        visibility:
+          type: string
+          enum: [PUBLIC, UNLISTED]
+        thumbnailMediaId: { type: string }
+        coverMediaId: { type: string }
+
+    GoLiveEligibility:
+      type: object
+      required: [canGoLive, missing]
+      properties:
+        canGoLive: { type: boolean }
+        missing:
+          type: array
+          items:
+            type: string
+            enum:
+              - CREATOR_NOT_APPROVED
+              - ROOM_THUMBNAIL
+              - ROOM_TITLE
+              - PRIVATE_RULES_TEXT
+              - PRIVATE_RATE
+              - TIP_MENU
+
+    ViewerRoomState:
+      type: object
+      required: [canChat, canTip, canRequestPrivate, hasActivePrivateSession]
+      properties:
+        canChat: { type: boolean }
+        canTip: { type: boolean }
+        canRequestPrivate: { type: boolean }
+        hasActivePrivateSession: { type: boolean }
+        estimatedPrivateMinutes:
+          type: integer
+          nullable: true
+
+    # ── Room menu ─────────────────────────────────────────────────────────────
+
+    RoomMenuItemDto:
+      type: object
+      required: [id, label, tokenAmount, isActive, sortOrder]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description:
+          type: string
+          nullable: true
+        tokenAmount: { type: integer }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
+
+    RoomGoalDto:
+      type: object
+      required: [id, title, targetTokens, currentTokens]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        targetTokens: { type: integer }
+        currentTokens: { type: integer }
+
+    # ── Creator menu items ────────────────────────────────────────────────────
+
+    CreatorMenuItemDto:
+      type: object
+      required: [id, label, tokenAmount, isActive, sortOrder, createdAt]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description:
+          type: string
+          nullable: true
+        tokenAmount: { type: integer }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    CreateCreatorMenuItemInput:
+      type: object
+      required: [label, tokenAmount]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 300 }
+        tokenAmount: { type: integer, minimum: 1 }
+        sortOrder: { type: integer, minimum: 0 }
+
+    UpdateCreatorMenuItemInput:
+      type: object
+      properties:
+        label: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 300 }
+        tokenAmount: { type: integer, minimum: 1 }
+        isActive: { type: boolean }
+        sortOrder: { type: integer, minimum: 0 }
+
+    # ── Chat ──────────────────────────────────────────────────────────────────
+
+    ChatMessageDto:
+      type: object
+      required: [id, roomId, type, body, createdAt]
+      properties:
+        id: { type: string }
+        roomId: { type: string }
+        user:
+          type: object
+          allOf:
+            - { $ref: '#/components/schemas/PublicUser' }
+          nullable: true
+        type:
+          type: string
+          enum:
+            - USER_MESSAGE
+            - CREATOR_MESSAGE
+            - SYSTEM_MESSAGE
+            - AUTO_MESSAGE
+            - TIP_EVENT
+            - MENU_EVENT
+            - GOAL_EVENT
+            - PRIVATE_REQUEST
+            - MODERATION_EVENT
+        body: { type: string }
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ── Tips ──────────────────────────────────────────────────────────────────
+
+    TipDto:
+      type: object
+      required: [id, roomId, fromUserId, toCreatorId, amountTokens, requestType, status, createdAt]
+      properties:
+        id: { type: string }
+        roomId: { type: string }
+        fromUserId: { type: string }
+        toCreatorId: { type: string }
+        amountTokens: { type: integer }
+        requestType:
+          type: string
+          enum: [GENERAL, MENU_ITEM, CUSTOM, GOAL]
+        menuItemId:
+          type: string
+          nullable: true
+        requestText:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [SENT, ACKNOWLEDGED, COMPLETED, DECLINED, REVERSED]
+        createdAt: { type: string, format: date-time }
+
+    CreateTipInput:
+      type: object
+      required: [amountTokens, requestType]
+      properties:
+        amountTokens: { type: integer, minimum: 1 }
+        requestType:
+          type: string
+          enum: [GENERAL, MENU_ITEM, CUSTOM, GOAL]
+        menuItemId: { type: string }
+        requestText: { type: string, maxLength: 500 }
+
+    # ── Token packs ───────────────────────────────────────────────────────────
+
+    TokenPackDto:
+      type: object
+      required: [id, name, priceCents, tokenAmount, bonusTokenAmount, currency, isActive, sortOrder]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        priceCents: { type: integer }
+        tokenAmount: { type: integer }
+        bonusTokenAmount: { type: integer }
+        currency: { type: string, enum: [USD] }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
+
+    # ── Payments ──────────────────────────────────────────────────────────────
+
+    PaymentTransactionDto:
+      type: object
+      required: [id, userId, tokenPackId, provider, status, amountCents, currency, tokensCredited, createdAt]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        tokenPackId: { type: string }
+        provider: { type: string, enum: [CCBILL] }
+        providerTxnId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, APPROVED, DECLINED, FAILED, REFUNDED, CHARGEBACK, MANUAL_REVIEW]
+        amountCents: { type: integer }
+        currency: { type: string, enum: [USD] }
+        tokensCredited: { type: integer }
+        checkoutUrl:
+          type: string
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    CreateCcbillCheckoutInput:
+      type: object
+      required: [tokenPackId]
+      properties:
+        tokenPackId: { type: string }
+
+    # ── Private sessions ──────────────────────────────────────────────────────
+
+    PrivateSessionDto:
+      type: object
+      required: [id, creatorId, viewerId, publicRoomId, status, rateTokensPerMinute, minMinutes, viewerCamRequired, screenShareAllowed, reservedTokens, capturedTokens, releasedTokens, requestedAt, createdAt]
+      properties:
+        id: { type: string }
+        creatorId: { type: string }
+        viewerId: { type: string }
+        publicRoomId: { type: string }
+        status:
+          type: string
+          enum: [REQUESTED, ACCEPTED, DECLINED, ACTIVE, ENDED, CANCELLED, EXPIRED, FORCE_ENDED]
+        rateTokensPerMinute: { type: integer }
+        minMinutes: { type: integer }
+        viewerCamRequired: { type: boolean }
+        screenShareAllowed: { type: boolean }
+        rulesText:
+          type: string
+          nullable: true
+        reservedTokens: { type: integer }
+        capturedTokens: { type: integer }
+        releasedTokens: { type: integer }
+        livekitRoomName:
+          type: string
+          nullable: true
+        requestedAt: { type: string, format: date-time }
+        acceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        declineReason:
+          type: string
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    RequestPrivateSessionInput:
+      type: object
+      properties:
+        requestedMinutes: { type: integer, minimum: 1 }
+        note: { type: string, maxLength: 300 }
+
+    DeclinePrivateSessionInput:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 300 }
+
+    # ── Media ─────────────────────────────────────────────────────────────────
+
+    MediaAssetDto:
+      type: object
+      required: [id, ownerUserId, type, url, status, source, createdAt]
+      properties:
+        id: { type: string }
+        ownerUserId: { type: string }
+        creatorId:
+          type: string
+          nullable: true
+        roomId:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [AVATAR, LOGO, ROOM_COVER, ROOM_THUMBNAIL_CAPTURE, BANNER]
+        url: { type: string }
+        blurhash:
+          type: string
+          nullable: true
+        dominantColor:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, REMOVED, HIDDEN]
+        source:
+          type: string
+          enum: [UPLOADED, CREATOR_CAPTURED]
+        createdAt: { type: string, format: date-time }
+
+    # ── Reports ───────────────────────────────────────────────────────────────
+
+    ReportDto:
+      type: object
+      required: [id, reporterId, targetType, reason, status, createdAt]
+      properties:
+        id: { type: string }
+        reporterId: { type: string }
+        targetType:
+          type: string
+          enum: [USER, ROOM, MESSAGE, MEDIA]
+        targetUserId:
+          type: string
+          nullable: true
+        targetRoomId:
+          type: string
+          nullable: true
+        targetMessageId:
+          type: string
+          nullable: true
+        targetMediaId:
+          type: string
+          nullable: true
+        reason: { type: string }
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, REVIEWED, ACTIONED, DISMISSED]
+        adminNotes:
+          type: string
+          nullable: true
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    CreateReportInput:
+      type: object
+      required: [targetType, reason]
+      properties:
+        targetType:
+          type: string
+          enum: [USER, ROOM, MESSAGE, MEDIA]
+        targetUserId: { type: string }
+        targetRoomId: { type: string }
+        targetMessageId: { type: string }
+        targetMediaId: { type: string }
+        reason: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+
+    ReviewReportInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [REVIEWED, ACTIONED, DISMISSED]
+        adminNotes: { type: string, maxLength: 2000 }
+
+    # ── Admin ─────────────────────────────────────────────────────────────────
+
+    AdminOverviewMetrics:
+      type: object
+      required: [liveRoomCount, totalUsers, totalCreators, pendingReports, pendingPayments, activePrivateSessions]
+      properties:
+        liveRoomCount: { type: integer }
+        totalUsers: { type: integer }
+        totalCreators: { type: integer }
+        pendingReports: { type: integer }
+        pendingPayments: { type: integer }
+        activePrivateSessions: { type: integer }
+        totalTokensPurchasedToday: { type: integer }
+        totalRevenueCentsToday: { type: integer }
+
+    AdminUserDetail:
+      type: object
+      required: [user, wallet]
+      properties:
+        user: { $ref: '#/components/schemas/PublicUser' }
+        wallet: { $ref: '#/components/schemas/WalletSummary' }
+        creatorProfile:
+          type: object
+          allOf:
+            - { $ref: '#/components/schemas/CreatorProfileDetail' }
+          nullable: true
+
+    AdminAdjustWalletInput:
+      type: object
+      required: [amountTokens, reason, adjustmentType]
+      properties:
+        amountTokens: { type: integer }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        adjustmentType: { type: string }
+
+    SuspendUserInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+
+    EndRoomInput:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 500 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+
+  /auth/register:
+    post:
+      operationId: register
+      summary: Register a new account
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterInput' }
+      responses:
+        '201':
+          description: Registered — session cookie set
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PublicUser' }
+        '409':
+          description: Email or username already exists
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: Login with email and password
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginInput' }
+      responses:
+        '200':
+          description: Authenticated — session cookie set
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PublicUser' }
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Logout and clear session
+      tags: [auth]
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      summary: Get the current authenticated user
+      tags: [auth]
+      responses:
+        '200':
+          description: Current user with wallet and creator profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Rooms (public) ──────────────────────────────────────────────────────────
+
+  /rooms:
+    get:
+      operationId: listRooms
+      summary: List live public rooms
+      security: []
+      tags: [rooms]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [LIVE, ENDED] }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated room list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/RoomCard' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+
+  /rooms/{slug}:
+    get:
+      operationId: getRoom
+      summary: Get a room by slug
+      security: []
+      tags: [rooms]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Room detail with viewer state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [room, viewerState]
+                    properties:
+                      room: { $ref: '#/components/schemas/RoomDetail' }
+                      livekitToken:
+                        type: string
+                        nullable: true
+                      viewerState: { $ref: '#/components/schemas/ViewerRoomState' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Creator rooms ────────────────────────────────────────────────────────────
+
+  /creator/rooms/prepare:
+    post:
+      operationId: prepareRoom
+      summary: Create or update the creator's draft room setup
+      tags: [creator-rooms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PrepareRoomInput' }
+      responses:
+        '200':
+          description: Room prepared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [room, goLiveEligibility]
+                    properties:
+                      room: { $ref: '#/components/schemas/RoomDetail' }
+                      goLiveEligibility: { $ref: '#/components/schemas/GoLiveEligibility' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /creator/rooms/{roomId}/go-live:
+    post:
+      operationId: goLive
+      summary: Go live — creator must pass eligibility check (approved status + thumbnail + tip menu + private rules)
+      tags: [creator-rooms]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Room is now LIVE with LiveKit credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [room, livekitToken, livekitUrl]
+                    properties:
+                      room: { $ref: '#/components/schemas/RoomDetail' }
+                      livekitToken: { type: string }
+                      livekitUrl: { type: string }
+        '400':
+          description: Eligibility check failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  goLiveEligibility: { $ref: '#/components/schemas/GoLiveEligibility' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /creator/rooms/{roomId}/end:
+    post:
+      operationId: endRoom
+      summary: End the creator's live room
+      tags: [creator-rooms]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Room ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [room]
+                    properties:
+                      room: { $ref: '#/components/schemas/RoomDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Creator profile ──────────────────────────────────────────────────────────
+
+  /creator/profile:
+    get:
+      operationId: getCreatorProfile
+      summary: Get the authenticated creator's own profile
+      tags: [creator-profile]
+      responses:
+        '200':
+          description: Creator profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CreatorProfileDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      operationId: updateCreatorProfile
+      summary: Update the authenticated creator's profile
+      tags: [creator-profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCreatorProfileInput' }
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CreatorProfileDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /creator/menu-items:
+    get:
+      operationId: listCreatorMenuItems
+      summary: List the creator's own menu items
+      tags: [creator-menu]
+      responses:
+        '200':
+          description: Creator menu items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CreatorMenuItemDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createCreatorMenuItem
+      summary: Create a new creator menu item
+      tags: [creator-menu]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCreatorMenuItemInput' }
+      responses:
+        '201':
+          description: Menu item created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CreatorMenuItemDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /creator/menu-items/{menuItemId}:
+    patch:
+      operationId: updateCreatorMenuItem
+      summary: Update a creator menu item
+      tags: [creator-menu]
+      parameters:
+        - in: path
+          name: menuItemId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCreatorMenuItemInput' }
+      responses:
+        '200':
+          description: Menu item updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CreatorMenuItemDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteCreatorMenuItem
+      summary: Delete a creator menu item
+      tags: [creator-menu]
+      parameters:
+        - in: path
+          name: menuItemId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Menu item deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── LiveKit ──────────────────────────────────────────────────────────────────
+
+  /livekit/token:
+    post:
+      operationId: getLivekitToken
+      summary: Get a LiveKit participant token for a public room or private session
+      tags: [livekit]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [appRoomType, appRoomId]
+              properties:
+                appRoomType:
+                  type: string
+                  enum: [PUBLIC_ROOM, PRIVATE_SESSION]
+                appRoomId: { type: string }
+      responses:
+        '200':
+          description: LiveKit token and URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [livekitUrl, token, roomName]
+                    properties:
+                      livekitUrl: { type: string }
+                      token: { type: string }
+                      roomName: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Chat ─────────────────────────────────────────────────────────────────────
+
+  /rooms/{roomId}/messages:
+    get:
+      operationId: getRoomMessages
+      summary: Get recent chat history for a room
+      security: []
+      tags: [chat]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Chat messages
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatMessageDto' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Tips ─────────────────────────────────────────────────────────────────────
+
+  /rooms/{roomId}/menu:
+    get:
+      operationId: getRoomMenu
+      summary: Get the tip menu and goal for a room
+      security: []
+      tags: [tips]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Room tip menu and goal
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/RoomMenuItemDto' }
+                      goal:
+                        type: object
+                        allOf:
+                          - { $ref: '#/components/schemas/RoomGoalDto' }
+                        nullable: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /rooms/{roomId}/tips:
+    post:
+      operationId: createTip
+      summary: Send a tip in a room
+      tags: [tips]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTipInput' }
+      responses:
+        '201':
+          description: Tip sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [tip, wallet]
+                    properties:
+                      tip: { $ref: '#/components/schemas/TipDto' }
+                      wallet: { $ref: '#/components/schemas/WalletSummary' }
+        '400':
+          description: Insufficient tokens or invalid tip
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /creator/tips/{tipId}/acknowledge:
+    post:
+      operationId: acknowledgeTip
+      summary: Creator acknowledges a tip
+      tags: [tips]
+      parameters:
+        - in: path
+          name: tipId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tip acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [tip]
+                    properties:
+                      tip: { $ref: '#/components/schemas/TipDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /creator/tips/{tipId}/complete:
+    post:
+      operationId: completeTip
+      summary: Creator marks a tip request as completed
+      tags: [tips]
+      parameters:
+        - in: path
+          name: tipId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tip completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [tip]
+                    properties:
+                      tip: { $ref: '#/components/schemas/TipDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Token packs ───────────────────────────────────────────────────────────────
+
+  /token-packs:
+    get:
+      operationId: listTokenPacks
+      summary: List available token packs
+      security: []
+      tags: [token-packs]
+      responses:
+        '200':
+          description: Active token packs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/TokenPackDto' }
+
+  # ── Payments ──────────────────────────────────────────────────────────────────
+
+  /payments/ccbill/checkout:
+    post:
+      operationId: createCcbillCheckout
+      summary: Create a CCBill token-pack checkout session
+      tags: [payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCcbillCheckoutInput' }
+      responses:
+        '200':
+          description: Checkout URL returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [paymentTransactionId, checkoutUrl]
+                    properties:
+                      paymentTransactionId: { type: string }
+                      checkoutUrl: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Token pack not found or inactive
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /webhooks/ccbill:
+    post:
+      operationId: handleCcbillWebhook
+      summary: CCBill payment webhook handler — idempotent, verifies signature
+      security: []
+      tags: [payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Webhook processed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '400':
+          description: Invalid signature or malformed payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  # ── Wallet ────────────────────────────────────────────────────────────────────
+
+  /wallet:
+    get:
+      operationId: getWallet
+      summary: Get the authenticated user's wallet and recent ledger entries
+      tags: [wallet]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Wallet and ledger
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [wallet, ledger, meta]
+                    properties:
+                      wallet: { $ref: '#/components/schemas/WalletSummary' }
+                      ledger:
+                        type: array
+                        items: { $ref: '#/components/schemas/LedgerEntryDto' }
+                      meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Private sessions ──────────────────────────────────────────────────────────
+
+  /rooms/{roomId}/private-sessions/request:
+    post:
+      operationId: requestPrivateSession
+      summary: Viewer requests a private session in a room
+      tags: [private-sessions]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestPrivateSessionInput' }
+      responses:
+        '201':
+          description: Private session requested
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [privateSession, wallet]
+                    properties:
+                      privateSession: { $ref: '#/components/schemas/PrivateSessionDto' }
+                      wallet: { $ref: '#/components/schemas/WalletSummary' }
+        '400':
+          description: Insufficient tokens or already has active session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /creator/private-sessions/{sessionId}/accept:
+    post:
+      operationId: acceptPrivateSession
+      summary: Creator accepts a private session request
+      tags: [private-sessions]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Private session accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [privateSession]
+                    properties:
+                      privateSession: { $ref: '#/components/schemas/PrivateSessionDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /creator/private-sessions/{sessionId}/decline:
+    post:
+      operationId: declinePrivateSession
+      summary: Creator declines a private session request
+      tags: [private-sessions]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeclinePrivateSessionInput' }
+      responses:
+        '200':
+          description: Private session declined and hold released
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [privateSession]
+                    properties:
+                      privateSession: { $ref: '#/components/schemas/PrivateSessionDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /private-sessions/{sessionId}/start:
+    post:
+      operationId: startPrivateSession
+      summary: Start an accepted private session and get LiveKit credentials
+      tags: [private-sessions]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Private session started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [privateSession, livekitToken, livekitUrl]
+                    properties:
+                      privateSession: { $ref: '#/components/schemas/PrivateSessionDto' }
+                      livekitToken: { type: string }
+                      livekitUrl: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /private-sessions/{sessionId}/end:
+    post:
+      operationId: endPrivateSession
+      summary: End an active private session — captures elapsed tokens, releases remainder
+      tags: [private-sessions]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Private session ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [privateSession]
+                    properties:
+                      privateSession: { $ref: '#/components/schemas/PrivateSessionDto' }
+                      wallet:
+                        type: object
+                        allOf:
+                          - { $ref: '#/components/schemas/WalletSummary' }
+                        nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Media ─────────────────────────────────────────────────────────────────────
+
+  /media/upload:
+    post:
+      operationId: uploadMedia
+      summary: Upload avatar, logo, banner, or room cover (multipart)
+      tags: [media]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, type]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                type:
+                  type: string
+                  enum: [AVATAR, LOGO, BANNER, ROOM_COVER]
+                creatorId: { type: string }
+                roomId: { type: string }
+      responses:
+        '201':
+          description: Media uploaded (status PENDING until reviewed)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/MediaAssetDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: File type or size not accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /rooms/{roomId}/thumbnail/capture:
+    post:
+      operationId: captureRoomThumbnail
+      summary: Submit a browser-captured frame as the room thumbnail
+      tags: [media]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Thumbnail captured and set on room
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [media, room]
+                    properties:
+                      media: { $ref: '#/components/schemas/MediaAssetDto' }
+                      room: { $ref: '#/components/schemas/RoomDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Creator earnings ──────────────────────────────────────────────────────────
+
+  /creator/earnings:
+    get:
+      operationId: getCreatorEarnings
+      summary: Get creator's earnings summary and recent ledger entries
+      tags: [creator-earnings]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Creator earnings and ledger
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [pendingTokenBalance, ledger, meta]
+                    properties:
+                      pendingTokenBalance: { type: integer }
+                      payoutStatus: { type: string }
+                      ledger:
+                        type: array
+                        items: { $ref: '#/components/schemas/LedgerEntryDto' }
+                      meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Reports ───────────────────────────────────────────────────────────────────
+
+  /reports:
+    post:
+      operationId: createReport
+      summary: Submit a report on a user, room, message, or media asset
+      tags: [reports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReportInput' }
+      responses:
+        '201':
+          description: Report submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/ReportDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  # ── Admin ─────────────────────────────────────────────────────────────────────
+
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      summary: Admin dashboard overview — live rooms, user counts, pending queues
+      tags: [admin]
+      responses:
+        '200':
+          description: Admin overview metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/AdminOverviewMetrics' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/rooms:
+    get:
+      operationId: listAdminRooms
+      summary: Admin list all rooms
+      tags: [admin]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [DRAFT, LIVE, ENDED, SUSPENDED, HIDDEN] }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Rooms list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/RoomCard' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/rooms/{roomId}:
+    get:
+      operationId: getAdminRoom
+      summary: Admin get room detail
+      tags: [admin]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Room detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/RoomDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/rooms/{roomId}/end:
+    post:
+      operationId: adminEndRoom
+      summary: Admin force-end a live room
+      tags: [admin]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EndRoomInput' }
+      responses:
+        '200':
+          description: Room ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [room]
+                    properties:
+                      room: { $ref: '#/components/schemas/RoomDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/rooms/{roomId}/hide:
+    post:
+      operationId: adminHideRoom
+      summary: Admin hide a room from public listing
+      tags: [admin]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EndRoomInput' }
+      responses:
+        '200':
+          description: Room hidden
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [room]
+                    properties:
+                      room: { $ref: '#/components/schemas/RoomDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      summary: Admin list all users
+      tags: [admin]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [ACTIVE, SUSPENDED, DELETED] }
+        - in: query
+          name: role
+          schema: { type: string, enum: [VIEWER, CREATOR, ADMIN, MODERATOR] }
+        - $ref: '#/components/parameters/SearchQuery'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Users list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PublicUser' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{userId}:
+    get:
+      operationId: getAdminUser
+      summary: Admin get user detail with wallet and creator profile
+      tags: [admin]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: User detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/AdminUserDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{userId}/suspend:
+    post:
+      operationId: adminSuspendUser
+      summary: Admin suspend a user
+      tags: [admin]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SuspendUserInput' }
+      responses:
+        '200':
+          description: User suspended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PublicUser' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{userId}/restore:
+    post:
+      operationId: adminRestoreUser
+      summary: Admin restore a suspended user
+      tags: [admin]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: User restored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PublicUser' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/creators:
+    get:
+      operationId: listAdminCreators
+      summary: Admin list all creator profiles
+      tags: [admin]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [DRAFT, PENDING, ACTIVE, PAUSED, SUSPENDED, BANNED] }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Creator profiles list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CreatorProfileDetail' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/creators/{creatorId}/approve:
+    post:
+      operationId: adminApproveCreator
+      summary: Admin approve a creator (sets status ACTIVE, enables go-live)
+      tags: [admin]
+      parameters:
+        - in: path
+          name: creatorId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Creator approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CreatorProfileDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/creators/{creatorId}/suspend:
+    post:
+      operationId: adminSuspendCreator
+      summary: Admin suspend a creator profile
+      tags: [admin]
+      parameters:
+        - in: path
+          name: creatorId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SuspendUserInput' }
+      responses:
+        '200':
+          description: Creator suspended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CreatorProfileDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/payments:
+    get:
+      operationId: listAdminPayments
+      summary: Admin list all payment transactions
+      tags: [admin]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, APPROVED, DECLINED, FAILED, REFUNDED, CHARGEBACK, MANUAL_REVIEW] }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Payment transactions list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PaymentTransactionDto' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/payments/{paymentId}:
+    get:
+      operationId: getAdminPayment
+      summary: Admin get a payment transaction with raw provider data
+      tags: [admin]
+      parameters:
+        - in: path
+          name: paymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Payment detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    allOf:
+                      - { $ref: '#/components/schemas/PaymentTransactionDto' }
+                      - type: object
+                        properties:
+                          rawProviderJson:
+                            type: object
+                            nullable: true
+                            additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/wallets/{userId}:
+    get:
+      operationId: getAdminWallet
+      summary: Admin get a user's wallet and full ledger
+      tags: [admin]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Wallet and ledger
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [wallet, ledger, meta]
+                    properties:
+                      wallet: { $ref: '#/components/schemas/WalletSummary' }
+                      ledger:
+                        type: array
+                        items: { $ref: '#/components/schemas/LedgerEntryDto' }
+                      meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/wallets/{userId}/adjust:
+    post:
+      operationId: adminAdjustWallet
+      summary: Admin create a manual wallet adjustment — appends ledger entry
+      tags: [admin]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminAdjustWalletInput' }
+      responses:
+        '200':
+          description: Wallet adjusted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [wallet, ledgerEntry]
+                    properties:
+                      wallet: { $ref: '#/components/schemas/WalletSummary' }
+                      ledgerEntry: { $ref: '#/components/schemas/LedgerEntryDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/private-sessions:
+    get:
+      operationId: listAdminPrivateSessions
+      summary: Admin list private sessions
+      tags: [admin]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [REQUESTED, ACCEPTED, DECLINED, ACTIVE, ENDED, CANCELLED, EXPIRED, FORCE_ENDED] }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Private sessions list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PrivateSessionDto' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/private-sessions/{sessionId}/force-end:
+    post:
+      operationId: adminForceEndPrivateSession
+      summary: Admin force-end an active private session
+      tags: [admin]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Private session force-ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [privateSession]
+                    properties:
+                      privateSession: { $ref: '#/components/schemas/PrivateSessionDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/media:
+    get:
+      operationId: listAdminMedia
+      summary: Admin list media assets for review
+      tags: [admin]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, APPROVED, REJECTED, REMOVED, HIDDEN] }
+        - in: query
+          name: type
+          schema: { type: string, enum: [AVATAR, LOGO, ROOM_COVER, ROOM_THUMBNAIL_CAPTURE, BANNER] }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Media assets list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/MediaAssetDto' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/media/{mediaId}/approve:
+    post:
+      operationId: adminApproveMedia
+      summary: Admin approve a media asset
+      tags: [admin]
+      parameters:
+        - in: path
+          name: mediaId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Media approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/MediaAssetDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/media/{mediaId}/hide:
+    post:
+      operationId: adminHideMedia
+      summary: Admin hide a media asset
+      tags: [admin]
+      parameters:
+        - in: path
+          name: mediaId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Media hidden
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/MediaAssetDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/reports:
+    get:
+      operationId: listAdminReports
+      summary: Admin list reports queue
+      tags: [admin]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, REVIEWED, ACTIONED, DISMISSED] }
+        - in: query
+          name: targetType
+          schema: { type: string, enum: [USER, ROOM, MESSAGE, MEDIA] }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Reports list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReportDto' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/reports/{reportId}/review:
+    post:
+      operationId: adminReviewReport
+      summary: Admin review and action a report
+      tags: [admin]
+      parameters:
+        - in: path
+          name: reportId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewReportInput' }
+      responses:
+        '200':
+          description: Report reviewed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/ReportDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
