@@ -1,5 +1,6 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   useCaptureRoomThumbnail,
   useCreatorEarnings,
@@ -25,9 +26,11 @@ import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
 import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant } from '@livekit/components-react'
 import { Track } from 'livekit-client'
-import { Ban, Camera, Coins, Gift, Image, Lock, MessageSquareOff, Pin, ShieldMinus, Upload, UserMinus, Volume2, VolumeX } from 'lucide-react'
+import { Camera, Coins, Image, Lock, Upload } from 'lucide-react'
 import { useRoomSocket } from '@/components/chat/useRoomSocket'
 import type { ChatMessageDto } from '@/components/chat/types'
+import { CreatorEventLog, ModerationButtons } from '@/components/chat/CreatorEventLog'
+import type { EventFilter } from '@/components/chat/eventFilter'
 
 type BroadcastState =
   | 'PREVIEW_LOCAL'
@@ -37,8 +40,6 @@ type BroadcastState =
   | 'LIVE_PRIVATE'
   | 'ENDING'
   | 'ENDED'
-
-type EventFilter = 'ALL' | 'CHAT' | 'TIPS' | 'PRIVATE' | 'MODERATION' | 'SYSTEM'
 
 function LocalPreview() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -151,14 +152,6 @@ function formatElapsed(seconds: number) {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-function getEventFilter(message: ChatMessageDto): EventFilter {
-  if (message.type === 'TIP_EVENT') return 'TIPS'
-  if (message.type === 'PRIVATE_REQUEST') return 'PRIVATE'
-  if (message.type === 'MODERATION_EVENT') return 'MODERATION'
-  if (message.type === 'SYSTEM_MESSAGE' || message.type === 'AUTO_MESSAGE' || message.type === 'GOAL_EVENT' || message.type === 'MENU_EVENT') return 'SYSTEM'
-  return 'CHAT'
-}
-
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-border bg-muted/30 px-3 py-2">
@@ -168,62 +161,9 @@ function Metric({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ModerationButtons({
-  userId,
-  messageId,
-  onUserAction,
-  onDeleteMessage,
-  onPinMessage,
-}: {
-  userId?: string
-  messageId?: string
-  onUserAction: (action: 'mute' | 'unmute' | 'kick' | 'ban' | 'shoutout' | 'vip' | 'unvip', userId: string) => void
-  onDeleteMessage?: (messageId: string) => void
-  onPinMessage?: (messageId: string) => void
-}) {
-  return (
-    <div className="flex flex-wrap gap-1">
-      {userId && (
-        <>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => onUserAction('mute', userId)}>
-            <VolumeX className="h-3.5 w-3.5" />
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => onUserAction('unmute', userId)}>
-            <Volume2 className="h-3.5 w-3.5" />
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => onUserAction('kick', userId)}>
-            <UserMinus className="h-3.5 w-3.5" />
-          </Button>
-          <Button type="button" size="sm" variant="destructive" className="h-7 px-2" onClick={() => onUserAction('ban', userId)}>
-            <Ban className="h-3.5 w-3.5" />
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => onUserAction('shoutout', userId)}>
-            <Gift className="h-3.5 w-3.5" />
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => onUserAction('vip', userId)}>
-            VIP
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => onUserAction('unvip', userId)}>
-            <ShieldMinus className="h-3.5 w-3.5" />
-          </Button>
-        </>
-      )}
-      {messageId && onDeleteMessage && (
-        <Button type="button" size="sm" variant="destructive" className="h-7 px-2" onClick={() => onDeleteMessage(messageId)}>
-          <MessageSquareOff className="h-3.5 w-3.5" />
-        </Button>
-      )}
-      {messageId && onPinMessage && (
-        <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => onPinMessage(messageId)}>
-          <Pin className="h-3.5 w-3.5" />
-        </Button>
-      )}
-    </div>
-  )
-}
-
 export function GoLivePage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { roomId } = useParams<{ roomId: string }>()
   const { data: roomData } = useRoom(roomId!)
   const room = roomData?.data?.room
@@ -235,6 +175,7 @@ export function GoLivePage() {
   const [privateStartedAt, setPrivateStartedAt] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
   const [eventFilter, setEventFilter] = useState<EventFilter>('ALL')
+  const [liveGoal, setLiveGoal] = useState<{ id: string; title: string; targetTokens: number; currentTokens: number } | undefined>()
 
   const mutation = useGoLive()
   const endMutation = useEndRoom()
@@ -254,17 +195,36 @@ export function GoLivePage() {
     if (payload.reward.type === 'VIP') toast.success('Viewer marked VIP')
     if (payload.reward.type === 'UNVIP') toast.success('Viewer removed from VIP')
   }, [])
+  const onGoalUpdated = useCallback((payload: { goal: { currentTokens: number; targetTokens: number; title: string; id: string } }) => {
+    setLiveGoal(payload.goal)
+  }, [])
+  const onPrivateRequestCreated = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['creator-private-sessions', roomId] })
+    toast.info('New private session request')
+  }, [queryClient, roomId])
+  const onRoomEnded = useCallback(() => {
+    toast.info('Broadcast ended')
+    setState('ENDED')
+    navigate(-1)
+  }, [navigate])
+  const onMessagePinned = useCallback(() => {
+    toast.success('Message pinned')
+  }, [])
   const socketCallbacks = useMemo(
-    () => ({ onTipCreated, onUserRewarded }),
-    [onTipCreated, onUserRewarded],
+    () => ({ onTipCreated, onUserRewarded, onGoalUpdated, onPrivateRequestCreated, onRoomEnded, onMessagePinned }),
+    [onTipCreated, onUserRewarded, onGoalUpdated, onPrivateRequestCreated, onRoomEnded, onMessagePinned],
   )
-  const { messages, viewerCount, markMessageDeleted } = useRoomSocket(roomId, initialMessages, socketCallbacks)
+  const { messages, viewerCount, pinnedMessage, markMessageDeleted } = useRoomSocket(roomId, initialMessages, socketCallbacks)
   const { data: roomMenuData } = useRoomMenu(roomId!)
   const { data: earningsData } = useCreatorEarnings({ limit: 10 })
 
   const { data: privateReqs } = useCreatorPrivateSessions(roomId!)
   const pendingRequests = privateReqs?.data?.filter((r: any) => r.status === 'REQUESTED') || []
-  const goal = (roomMenuData as any)?.data?.goal
+  const menuGoal = roomMenuData?.data?.goal
+  useEffect(() => {
+    if (menuGoal) setLiveGoal(menuGoal)
+  }, [menuGoal])
+  const goal = liveGoal ?? menuGoal
   const pendingEarnings = (earningsData as any)?.data?.pendingTokenBalance ?? 0
   
   const acceptMutation = useAcceptPrivateSession()
@@ -299,7 +259,6 @@ export function GoLivePage() {
   const privateBalanceEstimate = currentPrivateSession
     ? Math.max(0, (currentPrivateSession.reservedTokens ?? 0) - privateCapturedEstimate)
     : 0
-  const visibleMessages = messages.filter((message) => eventFilter === 'ALL' || getEventFilter(message) === eventFilter)
   const displayViewerCount = viewerCount ?? room?.viewerCount ?? 0
 
   useEffect(() => {
@@ -583,50 +542,15 @@ export function GoLivePage() {
             )}
           </div>
         </div>
-        <div className="flex-1 bg-card rounded-lg border border-border flex flex-col overflow-hidden">
-          <div className="space-y-3 border-b border-border bg-muted/20 p-3">
-            <div className="font-semibold text-sm uppercase tracking-wide">Event Log</div>
-            <div className="flex flex-wrap gap-1">
-              {(['ALL', 'CHAT', 'TIPS', 'PRIVATE', 'MODERATION', 'SYSTEM'] as EventFilter[]).map((filter) => (
-                <Button
-                  key={filter}
-                  type="button"
-                  size="sm"
-                  variant={eventFilter === filter ? 'default' : 'outline'}
-                  className="h-7 px-2"
-                  onClick={() => setEventFilter(filter)}
-                >
-                  {filter}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <div className="flex-1 p-4 overflow-y-auto space-y-4">
-            {visibleMessages.length === 0 && <div className="text-sm text-muted-foreground italic">No events yet...</div>}
-            {visibleMessages.map((m, i) => (
-              <div key={m.id ?? i} className={`rounded border border-border/70 p-2 text-sm ${m.deletedAt ? 'opacity-50' : ''}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-primary">{userLabel(m.user)}</span>
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{getEventFilter(m).toLowerCase()}</span>
-                    </div>
-                    <div className="mt-1 break-words">{m.deletedAt ? 'Message removed' : m.body}</div>
-                  </div>
-                  {!m.deletedAt && (
-                    <ModerationButtons
-                      userId={m.user?.id}
-                      messageId={m.id}
-                      onUserAction={handleUserAction}
-                      onDeleteMessage={handleDeleteMessage}
-                      onPinMessage={handlePinMessage}
-                    />
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <CreatorEventLog
+          messages={messages}
+          pinnedMessage={pinnedMessage}
+          eventFilter={eventFilter}
+          onEventFilterChange={setEventFilter}
+          onUserAction={handleUserAction}
+          onDeleteMessage={handleDeleteMessage}
+          onPinMessage={handlePinMessage}
+        />
       </div>
 
     </div>

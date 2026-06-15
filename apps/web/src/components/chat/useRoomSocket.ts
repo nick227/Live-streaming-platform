@@ -5,9 +5,20 @@ import type { ChatMessageDto } from './types'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
 
+type RoomGoal = {
+  id: string
+  title: string
+  targetTokens: number
+  currentTokens: number
+}
+
 export type RoomSocketCallbacks = {
   onTipCreated?: (payload: { tip: { amountTokens: number }; message: ChatMessageDto }) => void
   onUserRewarded?: (payload: { reward: { type: string } }) => void
+  onGoalUpdated?: (payload: { roomId: string; goal: RoomGoal }) => void
+  onPrivateRequestCreated?: () => void
+  onRoomEnded?: (payload: { roomId: string; reason?: string }) => void
+  onMessagePinned?: (payload: { pinnedMessage?: ChatMessageDto | null }) => void
 }
 
 export function useRoomSocket(
@@ -17,6 +28,7 @@ export function useRoomSocket(
 ) {
   const [messages, setMessages] = useState<ChatMessageDto[]>([])
   const [viewerCount, setViewerCount] = useState<number | null>(null)
+  const [pinnedMessage, setPinnedMessage] = useState<ChatMessageDto | null>(null)
   const [connected, setConnected] = useState(false)
   const [sending, setSending] = useState(false)
   const socketRef = useRef<Socket | null>(null)
@@ -51,6 +63,20 @@ export function useRoomSocket(
     const onUserRewarded = (payload: { reward: { type: string } }) => {
       callbacksRef.current?.onUserRewarded?.(payload)
     }
+    const onGoalUpdated = (payload: { roomId: string; goal: RoomGoal }) => {
+      callbacksRef.current?.onGoalUpdated?.(payload)
+    }
+    const onPrivateRequestCreated = () => {
+      callbacksRef.current?.onPrivateRequestCreated?.()
+    }
+    const onRoomEnded = (payload: { roomId: string; reason?: string }) => {
+      callbacksRef.current?.onRoomEnded?.(payload)
+    }
+    const onMessagePinned = (payload: { settings: { pinnedMessage?: ChatMessageDto | null } }) => {
+      const next = payload.settings.pinnedMessage ?? null
+      setPinnedMessage(next)
+      callbacksRef.current?.onMessagePinned?.({ pinnedMessage: next })
+    }
 
     socket.on('connect', onConnect)
     socket.on('disconnect', onDisconnect)
@@ -60,6 +86,10 @@ export function useRoomSocket(
     socket.on('tip:created', onTipCreated)
     socket.on('room:message_deleted', onMessageDeleted)
     socket.on('room:user_rewarded', onUserRewarded)
+    socket.on('goal:updated', onGoalUpdated)
+    socket.on('private:request_created', onPrivateRequestCreated)
+    socket.on('room:ended', onRoomEnded)
+    socket.on('room:message_pinned', onMessagePinned)
 
     return () => {
       socket.emit('room:leave', { roomId })
@@ -70,6 +100,10 @@ export function useRoomSocket(
       socket.off('tip:created', onTipCreated)
       socket.off('room:message_deleted', onMessageDeleted)
       socket.off('room:user_rewarded', onUserRewarded)
+      socket.off('goal:updated', onGoalUpdated)
+      socket.off('private:request_created', onPrivateRequestCreated)
+      socket.off('room:ended', onRoomEnded)
+      socket.off('room:message_pinned', onMessagePinned)
       socket.disconnect()
       socketRef.current = null
     }
@@ -115,5 +149,5 @@ export function useRoomSocket(
     )
   }, [])
 
-  return { messages, viewerCount, connected, sending, sendMessage, markMessageDeleted }
+  return { messages, viewerCount, pinnedMessage, connected, sending, sendMessage, markMessageDeleted }
 }

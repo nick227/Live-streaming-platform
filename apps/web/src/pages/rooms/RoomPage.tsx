@@ -105,7 +105,7 @@ export function RoomPage() {
     () => (msgData?.data as ChatMessageDto[] | undefined) ?? [],
     [msgData?.data],
   )
-  const { messages, viewerCount, connected, sending, sendMessage } = useRoomSocket(
+  const { messages, viewerCount, pinnedMessage, connected, sending, sendMessage } = useRoomSocket(
     room?.id,
     initialMessages,
   )
@@ -133,6 +133,7 @@ export function RoomPage() {
         <div className="lg:col-span-2">
           <RoomChatPanel
             messages={messages}
+            pinnedMessage={pinnedMessage}
             canChat={viewerState?.canChat ?? true}
             connected={connected}
             sending={sending}

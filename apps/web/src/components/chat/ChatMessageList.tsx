@@ -20,7 +20,7 @@ export function ChatMessageList({ messages }: { messages: ChatMessageDto[] }) {
         {messages.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center pt-8">No messages yet. Say hello!</p>
         ) : (
-          messages.map((message) => <ChatMessageRow key={message.id} message={message} />)
+          messages.map((message) => <ChatMessageRow key={message.id} message={message} showTimestamp />)
         )}
         <div ref={bottomRef} />
       </CardContent>

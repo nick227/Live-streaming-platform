@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { formatMessageTime } from './formatMessageTime'
 import type { ChatMessageDto } from './types'
 
 const SYSTEM_TYPES = new Set([
@@ -20,7 +21,7 @@ function rowClassName(type: ChatMessageDto['type']) {
   return 'border-transparent'
 }
 
-export function ChatMessageRow({ message }: { message: ChatMessageDto }) {
+export function ChatMessageRow({ message, showTimestamp = false }: { message: ChatMessageDto; showTimestamp?: boolean }) {
   const removed = Boolean(message.deletedAt)
 
   return (
@@ -43,6 +44,9 @@ export function ChatMessageRow({ message }: { message: ChatMessageDto }) {
         <span className={cn('break-words min-w-0', SYSTEM_TYPES.has(message.type) && 'text-muted-foreground italic')}>
           {removed ? 'Message removed' : message.body}
         </span>
+        {showTimestamp && (
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{formatMessageTime(message.createdAt)}</span>
+        )}
       </div>
     </div>
   )

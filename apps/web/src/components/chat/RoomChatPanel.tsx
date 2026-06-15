@@ -4,12 +4,14 @@ import type { ChatMessageDto } from './types'
 
 export function RoomChatPanel({
   messages,
+  pinnedMessage,
   canChat,
   connected,
   sending,
   onSend,
 }: {
   messages: ChatMessageDto[]
+  pinnedMessage?: ChatMessageDto | null
   canChat: boolean
   connected: boolean
   sending: boolean
@@ -23,6 +25,12 @@ export function RoomChatPanel({
           {connected ? 'Live' : 'Connecting...'}
         </span>
       </div>
+      {pinnedMessage && !pinnedMessage.deletedAt && (
+        <div className="rounded border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+          <span className="font-medium text-primary">Pinned: </span>
+          <span className="break-words">{pinnedMessage.body}</span>
+        </div>
+      )}
       <ChatMessageList messages={messages} />
       <ChatComposer canChat={canChat} connected={connected} sending={sending} onSend={onSend} />
     </div>
