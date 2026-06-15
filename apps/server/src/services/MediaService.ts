@@ -1,3 +1,4 @@
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { CREATOR_INCLUDE } from './RoomService'
@@ -5,6 +6,7 @@ import { createWriteStream, mkdirSync } from 'fs'
 import { resolve, extname } from 'path'
 import { nanoid } from 'nanoid'
 import { pipeline } from 'stream/promises'
+import type { MediaAssetSource } from '@prisma/client'
 
 const UPLOAD_DIR = process.env.STORAGE_LOCAL_PATH ?? resolve(__dirname, '../../../uploads')
 const STORAGE_BASE_URL = process.env.STORAGE_BASE_URL ?? 'http://localhost:3001/uploads'
@@ -22,15 +24,42 @@ const ALLOWED_MIME = new Set([
   'image/gif',
 ])
 
-async function uploadToS3(key: string, stream: NodeJS.ReadableStream, mimetype: string): Promise<string> {
-  // Lazy-require AWS SDK so local dev without S3 creds doesn't break at startup
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3')
-  const { Readable } = require('stream')
+const EXT_TO_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+}
 
+function useObjectStorage() {
+  return Boolean(STORAGE_ENDPOINT && STORAGE_BUCKET && STORAGE_ACCESS_KEY && STORAGE_SECRET_KEY)
+}
+
+function s3Endpoint() {
+  if (!STORAGE_ENDPOINT) return ''
+  try {
+    const url = new URL(STORAGE_ENDPOINT)
+    return `${url.protocol}//${url.host}`
+  } catch {
+    return STORAGE_ENDPOINT.replace(/\/+$/, '')
+  }
+}
+
+function objectPublicUrl(key: string) {
+  return `${STORAGE_BASE_URL.replace(/\/+$/, '')}/${key}`
+}
+
+function normalizeImageMimetype(mimetype: string, filename: string) {
+  if (ALLOWED_MIME.has(mimetype)) return mimetype
+  const fromExt = EXT_TO_MIME[extname(filename).toLowerCase()]
+  return fromExt ?? mimetype
+}
+
+async function uploadToS3(key: string, stream: NodeJS.ReadableStream, mimetype: string): Promise<string> {
   const client = new S3Client({
-    endpoint: STORAGE_ENDPOINT,
-    region: process.env.STORAGE_REGION ?? 'us-east-1',
+    endpoint: s3Endpoint(),
+    region: process.env.STORAGE_REGION ?? 'auto',
     credentials: { accessKeyId: STORAGE_ACCESS_KEY, secretAccessKey: STORAGE_SECRET_KEY },
     forcePathStyle: true,
   })
@@ -39,23 +68,22 @@ async function uploadToS3(key: string, stream: NodeJS.ReadableStream, mimetype: 
   for await (const chunk of stream as AsyncIterable<Buffer>) {
     chunks.push(chunk)
   }
-  const body = Buffer.concat(chunks)
 
   await client.send(new PutObjectCommand({
     Bucket: STORAGE_BUCKET,
     Key: key,
-    Body: body,
+    Body: Buffer.concat(chunks),
     ContentType: mimetype,
   }))
 
-  return `${STORAGE_ENDPOINT}/${STORAGE_BUCKET}/${key}`
+  return objectPublicUrl(key)
 }
 
 async function uploadToLocal(filename: string, stream: NodeJS.ReadableStream): Promise<string> {
   try { mkdirSync(UPLOAD_DIR, { recursive: true }) } catch { /* dir may already exist */ }
   const filePath = resolve(UPLOAD_DIR, filename)
   await pipeline(stream, createWriteStream(filePath))
-  return `${STORAGE_BASE_URL}/${filename}`
+  return objectPublicUrl(filename)
 }
 
 export class MediaService {
@@ -63,13 +91,13 @@ export class MediaService {
     ownerUserId: string,
     file: { filename: string; mimetype: string; file: NodeJS.ReadableStream; bytesRead?: number },
     type: 'AVATAR' | 'LOGO' | 'BANNER' | 'ROOM_COVER' | 'ROOM_THUMBNAIL_CAPTURE',
-    meta?: { creatorId?: string; roomId?: string },
+    meta?: { creatorId?: string; roomId?: string; source?: MediaAssetSource },
   ) {
-    if (!ALLOWED_MIME.has(file.mimetype)) {
+    const mimetype = normalizeImageMimetype(file.mimetype, file.filename)
+    if (!ALLOWED_MIME.has(mimetype)) {
       throw httpError(422, 'Unsupported file type')
     }
 
-    // Enforce size cap — bytesRead is populated by @fastify/multipart after the stream is consumed
     if (file.bytesRead !== undefined && file.bytesRead > MAX_FILE_BYTES) {
       throw httpError(413, 'File too large — maximum size is 10 MB')
     }
@@ -77,8 +105,8 @@ export class MediaService {
     const ext = extname(file.filename) || '.jpg'
     const key = `${nanoid(16)}${ext}`
 
-    const url = STORAGE_ENDPOINT
-      ? await uploadToS3(key, file.file, file.mimetype)
+    const url = useObjectStorage()
+      ? await uploadToS3(key, file.file, mimetype)
       : await uploadToLocal(key, file.file)
 
     const asset = await db.mediaAsset.create({
@@ -88,7 +116,7 @@ export class MediaService {
         roomId: meta?.roomId,
         type,
         url,
-        source: 'UPLOADED',
+        source: meta?.source ?? 'UPLOADED',
         status: 'APPROVED',
       },
     })
@@ -108,7 +136,11 @@ export class MediaService {
     if (!room) throw httpError(404, 'Room not found')
     if (room.creator.userId !== creatorUserId) throw httpError(403, 'Forbidden')
 
-    const asset = await this.upload(creatorUserId, file, 'ROOM_THUMBNAIL_CAPTURE', { roomId })
+    const asset = await this.upload(creatorUserId, file, 'ROOM_THUMBNAIL_CAPTURE', {
+      roomId,
+      creatorId: room.creator.id,
+      source: 'CREATOR_CAPTURED',
+    })
 
     const updatedRoom = await db.room.update({
       where: { id: roomId },
@@ -120,7 +152,20 @@ export class MediaService {
   }
 }
 
-export function formatMedia(asset: any) {
+export function formatMedia(asset: {
+  id: string
+  ownerUserId: string
+  creatorId: string | null
+  roomId: string | null
+  type: string
+  url: string
+  blurhash: string | null
+  dominantColor: string | null
+  status: string
+  source: string
+  createdAt: Date
+  updatedAt: Date
+}) {
   return {
     id: asset.id,
     ownerUserId: asset.ownerUserId,
