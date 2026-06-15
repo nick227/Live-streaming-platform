@@ -1,19 +1,19 @@
-// Generated from openapi.yaml — fill in seeds and assertions.
-// Run `pnpm test:generate` to add stubs for new routes.
-// Both test users are pre-seeded: use testOtherUserId for cross-user permission tests.
 import { describe, it, expect } from 'vitest'
-import { buildTestApp, asAuth, validateResponse, testUserId, testOtherUserId } from './helpers'
+import { buildTestApp, validateResponse } from './helpers'
+import { db } from '@streamyolo/db'
 
 const app = buildTestApp()
 
 describe('listTokenPacks', () => {
   it('GET /token-packs', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    await db.tokenPack.create({ data: { name: 'Test Pack', priceCents: 1000, tokenAmount: 100 } })
     const res = await app.inject({
       method: 'GET',
       url: '/token-packs',
-      // payload: {},
     })
+    if (res.statusCode !== 200) {
+      console.error(res.json())
+    }
     expect(res.statusCode).toBe(200)
     await validateResponse('listTokenPacks', 200, res.json())
   })

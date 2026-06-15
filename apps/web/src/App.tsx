@@ -1,58 +1,61 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { RegisterPage } from '@/pages/RegisterPage'
-import { LoginPage } from '@/pages/LoginPage'
-import { RoomsPage } from '@/pages/RoomsPage'
-import { RoomPage } from '@/pages/RoomPage'
-import { PrepareRoomPage } from '@/pages/PrepareRoomPage'
-import { GoLivePage } from '@/pages/GoLivePage'
-import { EndRoomPage } from '@/pages/EndRoomPage'
-import { CreatorProfilePage } from '@/pages/CreatorProfilePage'
-import { UpdateCreatorProfilePage } from '@/pages/UpdateCreatorProfilePage'
-import { CreatorMenuItemsPage } from '@/pages/CreatorMenuItemsPage'
-import { CreateCreatorMenuItemPage } from '@/pages/CreateCreatorMenuItemPage'
-import { UpdateCreatorMenuItemPage } from '@/pages/UpdateCreatorMenuItemPage'
-import { GetLivekitTokenPage } from '@/pages/GetLivekitTokenPage'
-import { RoomMessagesPage } from '@/pages/RoomMessagesPage'
-import { RoomMenuPage } from '@/pages/RoomMenuPage'
-import { CreateTipPage } from '@/pages/CreateTipPage'
-import { AcknowledgeTipPage } from '@/pages/AcknowledgeTipPage'
-import { CompleteTipPage } from '@/pages/CompleteTipPage'
-import { TokenPacksPage } from '@/pages/TokenPacksPage'
-import { CreateCcbillCheckoutPage } from '@/pages/CreateCcbillCheckoutPage'
-import { HandleCcbillWebhookPage } from '@/pages/HandleCcbillWebhookPage'
-import { WalletPage } from '@/pages/WalletPage'
-import { RequestPrivateSessionPage } from '@/pages/RequestPrivateSessionPage'
-import { AcceptPrivateSessionPage } from '@/pages/AcceptPrivateSessionPage'
-import { DeclinePrivateSessionPage } from '@/pages/DeclinePrivateSessionPage'
-import { StartPrivateSessionPage } from '@/pages/StartPrivateSessionPage'
-import { EndPrivateSessionPage } from '@/pages/EndPrivateSessionPage'
-import { UploadMediaPage } from '@/pages/UploadMediaPage'
-import { CaptureRoomThumbnailPage } from '@/pages/CaptureRoomThumbnailPage'
-import { CreatorEarningsPage } from '@/pages/CreatorEarningsPage'
-import { CreateReportPage } from '@/pages/CreateReportPage'
-import { AdminOverviewPage } from '@/pages/AdminOverviewPage'
-import { AdminRoomsPage } from '@/pages/AdminRoomsPage'
-import { AdminRoomPage } from '@/pages/AdminRoomPage'
-import { AdminEndRoomPage } from '@/pages/AdminEndRoomPage'
-import { AdminHideRoomPage } from '@/pages/AdminHideRoomPage'
-import { AdminUsersPage } from '@/pages/AdminUsersPage'
-import { AdminUserPage } from '@/pages/AdminUserPage'
-import { AdminSuspendUserPage } from '@/pages/AdminSuspendUserPage'
-import { AdminRestoreUserPage } from '@/pages/AdminRestoreUserPage'
-import { AdminCreatorsPage } from '@/pages/AdminCreatorsPage'
-import { AdminApproveCreatorPage } from '@/pages/AdminApproveCreatorPage'
-import { AdminSuspendCreatorPage } from '@/pages/AdminSuspendCreatorPage'
-import { AdminPaymentsPage } from '@/pages/AdminPaymentsPage'
-import { AdminPaymentPage } from '@/pages/AdminPaymentPage'
-import { AdminWalletPage } from '@/pages/AdminWalletPage'
-import { AdminAdjustWalletPage } from '@/pages/AdminAdjustWalletPage'
-import { AdminPrivateSessionsPage } from '@/pages/AdminPrivateSessionsPage'
-import { AdminForceEndPrivateSessionPage } from '@/pages/AdminForceEndPrivateSessionPage'
-import { AdminMediaPage } from '@/pages/AdminMediaPage'
-import { AdminApproveMediaPage } from '@/pages/AdminApproveMediaPage'
-import { AdminHideMediaPage } from '@/pages/AdminHideMediaPage'
-import { AdminReportsPage } from '@/pages/AdminReportsPage'
-import { AdminReviewReportPage } from '@/pages/AdminReviewReportPage'
+import {
+  AcceptPrivateSessionPage,
+  AcknowledgeTipPage,
+  AdminAdjustWalletPage,
+  AdminApproveCreatorPage,
+  AdminApproveMediaPage,
+  AdminCreatorsPage,
+  AdminEndRoomPage,
+  AdminForceEndPrivateSessionPage,
+  AdminHideMediaPage,
+  AdminHideRoomPage,
+  AdminMediaPage,
+  AdminOverviewPage,
+  AdminPaymentPage,
+  AdminPaymentsPage,
+  AdminPrivateSessionsPage,
+  AdminReportsPage,
+  AdminRestoreUserPage,
+  AdminReviewReportPage,
+  AdminRoomPage,
+  AdminRoomsPage,
+  AdminSuspendCreatorPage,
+  AdminSuspendUserPage,
+  AdminUserPage,
+  AdminUsersPage,
+  AdminWalletPage,
+  CaptureRoomThumbnailPage,
+  CompleteTipPage,
+  CreateCcbillCheckoutPage,
+  CreateCreatorMenuItemPage,
+  CreateReportPage,
+  CreateTipPage,
+  CreatorEarningsPage,
+  CreatorMenuItemsPage,
+  CreatorProfilePage,
+  DeclinePrivateSessionPage,
+  EndPrivateSessionPage,
+  EndRoomPage,
+  GetLivekitTokenPage,
+  GoLivePage,
+  HandleCcbillWebhookPage,
+  LoginPage,
+  PrepareRoomPage,
+  RegisterPage,
+  RequestPrivateSessionPage,
+  RoomMenuPage,
+  RoomMessagesPage,
+  RoomModerationPage,
+  RoomPage,
+  RoomsPage,
+  StartPrivateSessionPage,
+  TokenPacksPage,
+  UpdateCreatorMenuItemPage,
+  UpdateCreatorProfilePage,
+  UploadMediaPage,
+  WalletPage,
+} from '@/pages'
 import { AuthGuard } from '@/lib/AuthGuard'
 import { Shell } from '@/components/layout/Shell'
 
@@ -80,6 +83,7 @@ export function App() {
           <Route path="/creator/menu-items/:menuItemId" element={<UpdateCreatorMenuItemPage />} />
           <Route path="/livekit/token" element={<GetLivekitTokenPage />} />
           <Route path="/rooms/:roomId/messages" element={<RoomMessagesPage />} />
+          <Route path="/creator/rooms/:roomId/moderation" element={<RoomModerationPage />} />
           <Route path="/rooms/:roomId/menu" element={<RoomMenuPage />} />
           <Route path="/rooms/:roomId/tips" element={<CreateTipPage />} />
           <Route path="/creator/tips/:tipId/acknowledge" element={<AcknowledgeTipPage />} />

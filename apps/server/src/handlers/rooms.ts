@@ -1,6 +1,8 @@
 import { RoomService, formatRoom } from '../services/RoomService'
+import { LiveKitService } from '../services/LiveKitService'
 
 const roomService = new RoomService()
+const liveKitService = new LiveKitService()
 
 export async function listRooms(request: any, reply: any) {
   const { cursor, limit, q } = request.query ?? {}
@@ -44,33 +46,20 @@ export async function prepareRoom(request: any, reply: any) {
   })
 }
 
-import { AccessToken } from 'livekit-server-sdk'
-
 export async function goLive(request: any, reply: any) {
   const room = await roomService.goLive(request.user.id, request.params.roomId)
-  // Emit Socket.IO event if available
-  const io = (request.server as any).io
-  if (io) {
-    io.to(`room:${room.id}`).emit('room:viewer_count', { roomId: room.id, viewerCount: room.viewerCount })
+
+  // Ensure the LiveKit room exists before issuing a token (idempotent if already created)
+  try {
+    await liveKitService.createRoom(room.livekitRoomName)
+  } catch {
+    // room may already exist on LiveKit side
   }
 
-  const apiKey = process.env.LIVEKIT_API_KEY ?? 'dev-api-key'
-  const apiSecret = process.env.LIVEKIT_API_SECRET ?? 'dev-api-secret'
-  
-  const token = new AccessToken(apiKey, apiSecret, {
-    identity: request.user.id,
-    name: room.creator?.user?.displayName ?? request.user.displayName ?? request.user.id,
+  const { token: livekitToken, livekitUrl } = await liveKitService.getToken(request.user.id, {
+    appRoomType: 'PUBLIC_ROOM',
+    appRoomId: room.id,
   })
-  
-  token.addGrant({
-    roomJoin: true,
-    room: room.livekitRoomName,
-    canPublish: true,
-    canSubscribe: true,
-  })
-
-  const livekitToken = await token.toJwt()
-  const livekitUrl = process.env.LIVEKIT_URL ?? 'wss://dev.livekit.cloud'
 
   return reply.send({ data: { room: formatRoom(room), livekitToken, livekitUrl } })
 }

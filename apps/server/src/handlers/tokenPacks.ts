@@ -13,6 +13,7 @@ export async function listTokenPacks(_request: any, reply: any) {
       tokenAmount: p.tokenAmount,
       bonusTokenAmount: p.bonusTokenAmount,
       currency: p.currency,
+      isActive: p.isActive,
       sortOrder: p.sortOrder,
     })),
   })

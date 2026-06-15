@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { getApiClient, ApiError } from '../client'
+import { getApiClient, unwrap } from '../client'
 
 export function useCreateTip() {
   const qc = useQueryClient()
@@ -12,12 +12,12 @@ export function useCreateTip() {
       requestText?: string
     }) => {
       const { roomId, ...body } = args
-      const { data, error } = await getApiClient().POST('/rooms/{roomId}/tips', {
-        params: { path: { roomId } },
-        body: body as any,
-      })
-      if (error) throw new ApiError(500, 'Failed to send tip')
-      return data
+      return unwrap(
+        await getApiClient().POST('/rooms/{roomId}/tips', {
+          params: { path: { roomId } },
+          body: body as any,
+        }),
+      )
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['wallet'] }),
   })

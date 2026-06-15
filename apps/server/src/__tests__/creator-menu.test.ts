@@ -1,8 +1,6 @@
-// Generated from openapi.yaml — fill in seeds and assertions.
-// Run `pnpm test:generate` to add stubs for new routes.
-// Both test users are pre-seeded: use testOtherUserId for cross-user permission tests.
 import { describe, it, expect } from 'vitest'
-import { buildTestApp, asAuth, validateResponse, testUserId, testOtherUserId } from './helpers'
+import { buildTestApp, asAuth, validateResponse, testUserId, createTestCreator } from './helpers'
+import { db } from '@streamyolo/db'
 
 const app = buildTestApp()
 
@@ -13,12 +11,15 @@ describe('listCreatorMenuItems', () => {
   })
 
   it('GET /creator/menu-items', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    const creator = await createTestCreator(testUserId)
+    await db.creatorMenuItem.create({
+      data: { creatorId: creator.id, label: 'Shoutout', tokenAmount: 50, isActive: true }
+    })
+    
     const res = await app.inject({
       method: 'GET',
       url: '/creator/menu-items',
       headers: asAuth(testUserId),
-      // payload: {},
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('listCreatorMenuItems', 200, res.json())
@@ -32,12 +33,12 @@ describe('createCreatorMenuItem', () => {
   })
 
   it('POST /creator/menu-items', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    await createTestCreator(testUserId)
     const res = await app.inject({
       method: 'POST',
       url: '/creator/menu-items',
       headers: asAuth(testUserId),
-      // payload: {},
+      payload: { label: 'Dance', tokenAmount: 100 },
     })
     expect(res.statusCode).toBe(201)
     await validateResponse('createCreatorMenuItem', 201, res.json())
@@ -51,12 +52,16 @@ describe('updateCreatorMenuItem', () => {
   })
 
   it('PATCH /creator/menu-items/{menuItemId}', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    const creator = await createTestCreator(testUserId)
+    const item = await db.creatorMenuItem.create({
+      data: { creatorId: creator.id, label: 'Shoutout', tokenAmount: 50, isActive: true }
+    })
+
     const res = await app.inject({
       method: 'PATCH',
-      url: '/creator/menu-items/00000000-0000-0000-0000-000000000001',
+      url: `/creator/menu-items/${item.id}`,
       headers: asAuth(testUserId),
-      // payload: {},
+      payload: { label: 'Big Shoutout', tokenAmount: 75 },
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('updateCreatorMenuItem', 200, res.json())
@@ -70,12 +75,15 @@ describe('deleteCreatorMenuItem', () => {
   })
 
   it('DELETE /creator/menu-items/{menuItemId}', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    const creator = await createTestCreator(testUserId)
+    const item = await db.creatorMenuItem.create({
+      data: { creatorId: creator.id, label: 'Shoutout', tokenAmount: 50, isActive: true }
+    })
+
     const res = await app.inject({
       method: 'DELETE',
-      url: '/creator/menu-items/00000000-0000-0000-0000-000000000001',
+      url: `/creator/menu-items/${item.id}`,
       headers: asAuth(testUserId),
-      // payload: {},
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('deleteCreatorMenuItem', 200, res.json())

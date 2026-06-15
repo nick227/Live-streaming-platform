@@ -1,17 +1,12 @@
-import type { ChatMessageDto } from './types'
+import type { RoomEvent } from './types'
 
 export type EventFilter = 'ALL' | 'CHAT' | 'TIPS' | 'PRIVATE' | 'MODERATION' | 'SYSTEM'
 
-export function getEventFilter(message: ChatMessageDto): EventFilter {
-  if (message.type === 'TIP_EVENT') return 'TIPS'
-  if (message.type === 'PRIVATE_REQUEST') return 'PRIVATE'
-  if (message.type === 'MODERATION_EVENT') return 'MODERATION'
-  if (
-    message.type === 'SYSTEM_MESSAGE'
-    || message.type === 'AUTO_MESSAGE'
-    || message.type === 'GOAL_EVENT'
-    || message.type === 'MENU_EVENT'
-  ) {
+export function getEventFilter(event: RoomEvent): EventFilter {
+  if (event.type === 'tip') return 'TIPS'
+  if (event.type === 'moderation') return 'MODERATION'
+  if (event.type === 'system') {
+    if (event.message.type === 'PRIVATE_REQUEST') return 'PRIVATE'
     return 'SYSTEM'
   }
   return 'CHAT'

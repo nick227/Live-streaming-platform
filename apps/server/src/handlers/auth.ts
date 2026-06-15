@@ -26,34 +26,31 @@ export async function logout(request: any, reply: any) {
   const token = request.cookies?.token ?? request.headers.authorization?.replace('Bearer ', '')
   if (token) await authService.logout(token)
   reply.clearCookie('token', { path: '/' })
-  return reply.send({ data: null })
+  return reply.send({ ok: true })
 }
 
 export async function getCurrentUser(request: any, reply: any) {
   const user = request.user
   const wallet = (user as any).wallet ?? null
   const creatorProfile = (user as any).creatorProfile ?? null
-  return reply.send({
-    data: {
-      user: formatUser(user),
-      wallet: wallet
-        ? {
-            tokenBalance: wallet.tokenBalance,
-            reservedTokenBalance: wallet.reservedTokenBalance,
-            lifetimePurchasedTokens: wallet.lifetimePurchasedTokens,
-            lifetimeSpentTokens: wallet.lifetimeSpentTokens,
-          }
-        : null,
-      creatorProfile: creatorProfile
-        ? {
-            id: creatorProfile.id,
-            userId: creatorProfile.userId,
-            status: creatorProfile.status,
-            isLive: creatorProfile.isLive,
-          }
-        : null,
-    },
-  })
+  const payload: any = { user: formatUser(user) }
+  if (wallet) {
+    payload.wallet = {
+      tokenBalance: wallet.tokenBalance,
+      reservedTokenBalance: wallet.reservedTokenBalance,
+      lifetimePurchasedTokens: wallet.lifetimePurchasedTokens,
+      lifetimeSpentTokens: wallet.lifetimeSpentTokens,
+    }
+  }
+  if (creatorProfile) {
+    payload.creatorProfile = {
+      id: creatorProfile.id,
+      userId: creatorProfile.userId,
+      status: creatorProfile.status,
+      isLive: creatorProfile.isLive,
+    }
+  }
+  return reply.send({ data: payload })
 }
 
 export async function updateCurrentUser(request: any, reply: any) {
@@ -64,6 +61,7 @@ export async function updateCurrentUser(request: any, reply: any) {
 function formatUser(user: any) {
   return {
     id: user.id,
+    username: user.username,
     displayName: user.displayName,
     role: user.role,
     status: user.status,

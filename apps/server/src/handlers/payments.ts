@@ -3,9 +3,16 @@ import { PaymentService } from '../services/PaymentService'
 const paymentService = new PaymentService()
 
 export async function createCcbillCheckout(request: any, reply: any) {
-  const { tokenPackId } = request.body
-  const result = await paymentService.createCcbillCheckout(request.user.id, tokenPackId)
-  return reply.send({ data: result })
+  try {
+    const { tokenPackId } = request.body
+    const result = await paymentService.createCcbillCheckout(request.user.id, tokenPackId)
+    return reply.send({ data: result })
+  } catch (err: any) {
+    if (err.statusCode) {
+      return reply.status(err.statusCode).send({ error: err.message })
+    }
+    throw err
+  }
 }
 
 export async function handleCcbillWebhook(request: any, reply: any) {

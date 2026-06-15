@@ -1,6 +1,6 @@
 import { ChatMessageList } from './ChatMessageList'
 import { ChatComposer } from './ChatComposer'
-import type { ChatMessageDto } from './types'
+import type { ChatMessageDto, RoomEvent } from './types'
 
 export function RoomChatPanel({
   messages,
@@ -10,7 +10,7 @@ export function RoomChatPanel({
   sending,
   onSend,
 }: {
-  messages: ChatMessageDto[]
+  messages: RoomEvent[]
   pinnedMessage?: ChatMessageDto | null
   canChat: boolean
   connected: boolean
@@ -18,7 +18,7 @@ export function RoomChatPanel({
   onSend: (body: string) => Promise<void>
 }) {
   return (
-    <div className="flex flex-col gap-2 min-h-0">
+    <div className="flex flex-col gap-2 min-h-0 h-full">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Chat</h2>
         <span className="text-xs text-muted-foreground">

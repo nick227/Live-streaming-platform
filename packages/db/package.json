@@ -3,14 +3,18 @@
   "version": "0.0.1",
   "main": "./src/client.ts",
   "scripts": {
-    "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "postinstall": "prisma generate",
+    "db:push": "dotenv -e ../../.env -- prisma db push",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate deploy",
+    "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "db:studio": "dotenv -e ../../.env -- prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^5.0.0"
+    "@prisma/client": "^5.0.0",
+    "argon2": "^0.31.0"
   },
   "devDependencies": {
+    "dotenv-cli": "^7.0.0",
     "prisma": "^5.0.0",
     "tsx": "^4.0.0"
   }

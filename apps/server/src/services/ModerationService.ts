@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { normalizeLimit } from '../lib/pagination'
 
@@ -166,7 +167,7 @@ export class ModerationService {
   async deleteMessage(actorUserId: string, roomId: string, messageId: string) {
     const { room, creator } = await this.assertCreatorOwnsRoom(actorUserId, roomId)
     const message = await db.chatMessage.findFirst({ where: { id: messageId, roomId } })
-    if (!message) throw { statusCode: 404, message: 'Message not found' }
+    if (!message) throw httpError(404, 'Message not found')
 
     const [updated, action] = await db.$transaction(async (tx: any) => {
       const updated = await tx.chatMessage.update({
@@ -193,7 +194,7 @@ export class ModerationService {
   async pinMessage(actorUserId: string, roomId: string, messageId: string) {
     const { room, creator } = await this.assertCreatorOwnsRoom(actorUserId, roomId)
     const message = await db.chatMessage.findFirst({ where: { id: messageId, roomId, deletedAt: null } })
-    if (!message) throw { statusCode: 404, message: 'Message not found' }
+    if (!message) throw httpError(404, 'Message not found')
 
     const [settings, action] = await db.$transaction(async (tx: any) => {
       const settings = await tx.roomChatSettings.upsert({
@@ -244,7 +245,7 @@ export class ModerationService {
 
   async canJoinRoom(userId: string, roomId: string) {
     const room = await db.room.findUnique({ where: { id: roomId }, include: { creator: true } })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
+    if (!room) throw httpError(404, 'Room not found')
     if (room.creator.userId === userId) return { ok: true }
 
     const ban = await db.creatorUserBan.findFirst({
@@ -296,21 +297,21 @@ export class ModerationService {
 
   private async getCreator(userId: string) {
     const creator = await db.creatorProfile.findUnique({ where: { userId } })
-    if (!creator) throw { statusCode: 403, message: 'Creator profile required' }
+    if (!creator) throw httpError(403, 'Creator profile required')
     return creator
   }
 
   private async assertCreatorOwnsRoom(userId: string, roomId: string) {
     const creator = await this.getCreator(userId)
     const room = await db.room.findUnique({ where: { id: roomId } })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
-    if (room.creatorId !== creator.id) throw { statusCode: 403, message: 'Forbidden' }
+    if (!room) throw httpError(404, 'Room not found')
+    if (room.creatorId !== creator.id) throw httpError(403, 'Forbidden')
     return { room, creator }
   }
 
   private async assertTargetUser(userId: string) {
     const user = await db.user.findUnique({ where: { id: userId } })
-    if (!user) throw { statusCode: 404, message: 'Target user not found' }
+    if (!user) throw httpError(404, 'Target user not found')
     return user
   }
 }

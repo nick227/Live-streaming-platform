@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 
 export class TipService {
@@ -16,15 +17,22 @@ export class TipService {
       where: { id: roomId },
       include: { creator: true },
     })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
-    if (room.status !== 'LIVE') throw { statusCode: 400, message: 'Room is not live' }
+    if (!room) throw httpError(404, 'Room not found')
+    if (room.status !== 'LIVE') throw httpError(400, 'Room is not live')
+    if (room.creator.userId !== viewerId) {
+      const ban = await db.creatorUserBan.findFirst({
+        where: {
+          creatorId: room.creatorId,
+          userId: viewerId,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+      })
+      if (ban) throw httpError(403, 'You are banned from this creator')
+    }
 
     const [tip, viewerWallet] = await db.$transaction(async (tx: any) => {
       const wallet = await tx.wallet.findUnique({ where: { userId: viewerId } })
-      if (!wallet) throw { statusCode: 400, message: 'Wallet not found' }
-      if (wallet.tokenBalance < data.amountTokens) {
-        throw { statusCode: 400, message: 'Insufficient tokens' }
-      }
+      if (!wallet) throw httpError(400, 'Wallet not found')
 
       const tip = await tx.tip.create({
         data: {
@@ -40,14 +48,18 @@ export class TipService {
         },
       })
 
-      const newViewerBalance = wallet.tokenBalance - data.amountTokens
-      const updatedWallet = await tx.wallet.update({
-        where: { userId: viewerId },
+      const debit = await tx.wallet.updateMany({
+        where: { userId: viewerId, tokenBalance: { gte: data.amountTokens } },
         data: {
           tokenBalance: { decrement: data.amountTokens },
           lifetimeSpentTokens: { increment: data.amountTokens },
         },
       })
+      if (debit.count !== 1) {
+        throw httpError(400, 'Insufficient tokens')
+      }
+
+      const updatedWallet = await tx.wallet.findUniqueOrThrow({ where: { userId: viewerId } })
 
       await tx.ledgerEntry.create({
         data: {
@@ -55,7 +67,7 @@ export class TipService {
           userId: viewerId,
           type: 'TIP_SENT',
           amountTokens: -data.amountTokens,
-          balanceAfter: newViewerBalance,
+          balanceAfter: updatedWallet.tokenBalance,
           roomId,
           tipId: tip.id,
           description: `Tip sent in room ${roomId}`,
@@ -74,7 +86,7 @@ export class TipService {
           userId: room.creator.userId,
           type: 'TIP_RECEIVED',
           amountTokens: data.amountTokens,
-          balanceAfter: creatorWallet.tokenBalance + data.amountTokens,
+          balanceAfter: creatorWallet.tokenBalance,
           roomId,
           tipId: tip.id,
           description: `Tip received in room ${roomId}`,
@@ -103,8 +115,8 @@ export class TipService {
 
   async acknowledgeTip(creatorUserId: string, tipId: string) {
     const tip = await db.tip.findUnique({ where: { id: tipId }, include: { toCreator: true } })
-    if (!tip) throw { statusCode: 404, message: 'Tip not found' }
-    if (tip.toCreator.userId !== creatorUserId) throw { statusCode: 403, message: 'Forbidden' }
+    if (!tip) throw httpError(404, 'Tip not found')
+    if (tip.toCreator.userId !== creatorUserId) throw httpError(403, 'Forbidden')
 
     const updated = await db.tip.update({
       where: { id: tipId },
@@ -115,8 +127,8 @@ export class TipService {
 
   async completeTip(creatorUserId: string, tipId: string) {
     const tip = await db.tip.findUnique({ where: { id: tipId }, include: { toCreator: true } })
-    if (!tip) throw { statusCode: 404, message: 'Tip not found' }
-    if (tip.toCreator.userId !== creatorUserId) throw { statusCode: 403, message: 'Forbidden' }
+    if (!tip) throw httpError(404, 'Tip not found')
+    if (tip.toCreator.userId !== creatorUserId) throw httpError(403, 'Forbidden')
 
     const updated = await db.tip.update({
       where: { id: tipId },

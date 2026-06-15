@@ -1,6 +1,12 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { nanoid } from 'nanoid'
 import { encodeCursor, decodeCursor, normalizeLimit } from '../lib/pagination'
+import { LiveKitService } from './LiveKitService'
+import { PrivateSessionService } from './PrivateSessionService'
+
+const liveKitService = new LiveKitService()
+const privateSessionService = new PrivateSessionService()
 
 export class RoomService {
   async listByCreatorUserId(
@@ -85,7 +91,7 @@ export class RoomService {
         menuItems: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } },
       },
     })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
+    if (!room) throw httpError(404, 'Room not found')
     return room
   }
 
@@ -96,7 +102,7 @@ export class RoomService {
     let creator = await db.creatorProfile.findUnique({ where: { userId: creatorUserId } })
     if (!creator) {
       const user = await db.user.findUnique({ where: { id: creatorUserId } })
-      if (!user) throw { statusCode: 404, message: 'User not found' }
+      if (!user) throw httpError(404, 'User not found')
       creator = await db.creatorProfile.create({
         data: {
           userId: creatorUserId,
@@ -129,8 +135,14 @@ export class RoomService {
 
   async goLive(creatorUserId: string, roomId: string) {
     const room = await this._assertCreatorOwnsRoom(creatorUserId, roomId)
+
+    const creator = await db.creatorProfile.findUnique({ where: { id: room.creatorId } })
+    if (creator?.isLive && creator.currentRoomId !== roomId) {
+      throw httpError(400, 'You are already live in another room')
+    }
+
     const missing = await this._goLiveEligibility(room)
-    if (missing.length > 0) throw { statusCode: 422, message: `Missing: ${missing.join(', ')}` }
+    if (missing.length > 0) throw httpError(422, `Missing: ${missing.join(', ')}`)
 
     const updated = await db.room.update({
       where: { id: roomId },
@@ -149,6 +161,24 @@ export class RoomService {
   async endRoom(creatorUserId: string, roomId: string) {
     const room = await this._assertCreatorOwnsRoom(creatorUserId, roomId)
 
+    // Terminate all open private sessions so token holds are released and
+    // any active session bills are settled before the room closes.
+    const openSessions = await db.privateSession.findMany({
+      where: { publicRoomId: roomId, status: { in: ['REQUESTED', 'ACCEPTED', 'ACTIVE'] } },
+      include: { creator: true },
+    })
+    for (const session of openSessions) {
+      try {
+        if (session.status === 'ACTIVE') {
+          await privateSessionService.end(session.creator.userId, session.id)
+        } else {
+          await privateSessionService.decline(session.creator.userId, session.id, { reason: 'Room ended' })
+        }
+      } catch (err) {
+        console.error(`[RoomService] Failed to clean up session ${session.id}:`, err)
+      }
+    }
+
     const updated = await db.room.update({
       where: { id: roomId },
       data: { status: 'ENDED', endedAt: new Date() },
@@ -159,6 +189,9 @@ export class RoomService {
       where: { id: room.creatorId },
       data: { isLive: false, currentRoomId: null },
     })
+
+    // Disconnect all viewers by deleting the LiveKit room.
+    await liveKitService.deleteRoom(room.livekitRoomName)
 
     return updated
   }
@@ -190,11 +223,11 @@ export class RoomService {
 
   private async _assertCreatorOwnsRoom(creatorUserId: string, roomId: string) {
     const creator = await db.creatorProfile.findUnique({ where: { userId: creatorUserId } })
-    if (!creator) throw { statusCode: 403, message: 'Creator profile required' }
+    if (!creator) throw httpError(403, 'Creator profile required')
 
     const room = await db.room.findUnique({ where: { id: roomId } })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
-    if (room.creatorId !== creator.id) throw { statusCode: 403, message: 'Forbidden' }
+    if (!room) throw httpError(404, 'Room not found')
+    if (room.creatorId !== creator.id) throw httpError(403, 'Forbidden')
 
     return room
   }

@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { nanoid } from 'nanoid'
 import { LiveKitService } from './LiveKitService'
@@ -10,19 +11,23 @@ export class PrivateSessionService {
       where: { id: roomId },
       include: { creator: true },
     })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
-    if (room.status !== 'LIVE') throw { statusCode: 400, message: 'Room is not live' }
+    if (!room) throw httpError(404, 'Room not found')
+    if (room.status !== 'LIVE') throw httpError(400, 'Room is not live')
+    if (room.creator.userId !== viewerId) {
+      const ban = await db.creatorUserBan.findFirst({
+        where: {
+          creatorId: room.creatorId,
+          userId: viewerId,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+      })
+      if (ban) throw httpError(403, 'You are banned from this creator')
+    }
 
     const creator = room.creator
     const ratePerMin = creator.privateRateTokensPerMinute
     const minMinutes = creator.minPrivateMinutes
     const minCost = ratePerMin * minMinutes
-
-    const wallet = await db.wallet.findUnique({ where: { userId: viewerId } })
-    if (!wallet) throw { statusCode: 400, message: 'Wallet not found' }
-    if (wallet.tokenBalance < minCost) {
-      throw { statusCode: 400, message: `Insufficient tokens — minimum cost is ${minCost}` }
-    }
 
     // Check no active session already
     const activeSession = await db.privateSession.findFirst({
@@ -31,9 +36,12 @@ export class PrivateSessionService {
         status: { in: ['REQUESTED', 'ACCEPTED', 'ACTIVE'] },
       },
     })
-    if (activeSession) throw { statusCode: 400, message: 'You already have an active private session' }
+    if (activeSession) throw httpError(400, 'You already have an active private session')
 
     const [session, viewerWallet] = await db.$transaction(async (tx: any) => {
+      const wallet = await tx.wallet.findUnique({ where: { userId: viewerId } })
+      if (!wallet) throw httpError(400, 'Wallet not found')
+
       const session = await tx.privateSession.create({
         data: {
           creatorId: creator.id,
@@ -49,13 +57,18 @@ export class PrivateSessionService {
         },
       })
 
-      const updatedWallet = await tx.wallet.update({
-        where: { userId: viewerId },
+      const hold = await tx.wallet.updateMany({
+        where: { userId: viewerId, tokenBalance: { gte: minCost } },
         data: {
           tokenBalance: { decrement: minCost },
           reservedTokenBalance: { increment: minCost },
         },
       })
+      if (hold.count !== 1) {
+        throw httpError(400, `Insufficient tokens — minimum cost is ${minCost}`)
+      }
+
+      const updatedWallet = await tx.wallet.findUniqueOrThrow({ where: { userId: viewerId } })
 
       await tx.ledgerEntry.create({
         data: {
@@ -86,7 +99,7 @@ export class PrivateSessionService {
   async accept(creatorUserId: string, sessionId: string) {
     const session = await this._assertCreatorOwnsSession(creatorUserId, sessionId)
     if (session.status !== 'REQUESTED') {
-      throw { statusCode: 400, message: 'Session is not in REQUESTED state' }
+      throw httpError(400, 'Session is not in REQUESTED state')
     }
 
     const updated = await db.privateSession.update({
@@ -140,20 +153,20 @@ export class PrivateSessionService {
       where: { id: sessionId },
       include: { creator: true },
     })
-    if (!session) throw { statusCode: 404, message: 'Session not found' }
+    if (!session) throw httpError(404, 'Session not found')
     if (session.status !== 'ACCEPTED') {
-      throw { statusCode: 400, message: 'Session must be ACCEPTED before starting' }
+      throw httpError(400, 'Session must be ACCEPTED before starting')
     }
 
     const isCreator = session.creator.userId === userId
     const isViewer = session.viewerId === userId
-    if (!isCreator && !isViewer) throw { statusCode: 403, message: 'Forbidden' }
+    if (!isCreator && !isViewer) throw httpError(403, 'Forbidden')
 
     const livekitRoomName = `private-${nanoid(16)}`
     try {
       await liveKit.createRoom(livekitRoomName)
     } catch (err) {
-      throw { statusCode: 502, message: 'Failed to create video room — please try again' }
+      throw httpError(502, 'Failed to create video room — please try again')
     }
 
     let updated
@@ -184,13 +197,13 @@ export class PrivateSessionService {
       where: { id: sessionId },
       include: { creator: true },
     })
-    if (!session) throw { statusCode: 404, message: 'Session not found' }
+    if (!session) throw httpError(404, 'Session not found')
 
     const isCreator = session.creator.userId === userId
     const isViewer = session.viewerId === userId
-    if (!isCreator && !isViewer) throw { statusCode: 403, message: 'Forbidden' }
+    if (!isCreator && !isViewer) throw httpError(403, 'Forbidden')
 
-    if (!session.startedAt) throw { statusCode: 400, message: 'Session not started' }
+    if (!session.startedAt) throw httpError(400, 'Session not started')
 
     const elapsedMs = Date.now() - session.startedAt.getTime()
     const elapsedMinutes = Math.ceil(elapsedMs / 60000)
@@ -341,8 +354,8 @@ export class PrivateSessionService {
       where: { id: sessionId },
       include: { creator: true },
     })
-    if (!session) throw { statusCode: 404, message: 'Session not found' }
-    if (session.creator.userId !== creatorUserId) throw { statusCode: 403, message: 'Forbidden' }
+    if (!session) throw httpError(404, 'Session not found')
+    if (session.creator.userId !== creatorUserId) throw httpError(403, 'Forbidden')
     return session
   }
 }

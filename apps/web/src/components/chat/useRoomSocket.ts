@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { io, type Socket } from 'socket.io-client'
-import { mergeMessages, upsertMessage } from './mergeMessages'
-import type { ChatMessageDto } from './types'
+import { mergeMessages, upsertMessage, toRoomEvent } from './mergeMessages'
+import type { ChatMessageDto, RoomEvent } from './types'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
 
@@ -17,6 +19,7 @@ export type RoomSocketCallbacks = {
   onUserRewarded?: (payload: { reward: { type: string } }) => void
   onGoalUpdated?: (payload: { roomId: string; goal: RoomGoal }) => void
   onPrivateRequestCreated?: () => void
+  onPrivateRequestStatusChanged?: (payload: { status: string }) => void
   onRoomEnded?: (payload: { roomId: string; reason?: string }) => void
   onMessagePinned?: (payload: { pinnedMessage?: ChatMessageDto | null }) => void
 }
@@ -26,9 +29,11 @@ export function useRoomSocket(
   initialMessages: ChatMessageDto[],
   callbacks?: RoomSocketCallbacks,
 ) {
-  const [messages, setMessages] = useState<ChatMessageDto[]>([])
+  const navigate = useNavigate()
+  const [messages, setMessages] = useState<RoomEvent[]>([])
   const [viewerCount, setViewerCount] = useState<number | null>(null)
   const [pinnedMessage, setPinnedMessage] = useState<ChatMessageDto | null>(null)
+  const [privateRequestStatus, setPrivateRequestStatus] = useState<'IDLE' | 'PENDING' | 'ACCEPTED' | 'DECLINED'>('IDLE')
   const [connected, setConnected] = useState(false)
   const [sending, setSending] = useState(false)
   const socketRef = useRef<Socket | null>(null)
@@ -37,7 +42,7 @@ export function useRoomSocket(
 
   useEffect(() => {
     if (initialMessages.length === 0) return
-    setMessages((prev) => mergeMessages(prev, initialMessages))
+    setMessages((prev) => mergeMessages(prev, initialMessages.map((m) => toRoomEvent(m))))
   }, [initialMessages])
 
   useEffect(() => {
@@ -50,15 +55,28 @@ export function useRoomSocket(
     const onDisconnect = () => setConnected(false)
     const onViewerCount = (data: { viewerCount: number }) => setViewerCount(data.viewerCount)
     const onChatMessage = (payload: { message: ChatMessageDto }) => {
-      setMessages((prev) => upsertMessage(prev, payload.message))
+      setMessages((prev) => upsertMessage(prev, toRoomEvent(payload.message)))
     }
     const onTipCreated = (payload: { tip: { amountTokens: number }; message: ChatMessageDto }) => {
-      setMessages((prev) => upsertMessage(prev, payload.message))
+      setMessages((prev) => upsertMessage(prev, toRoomEvent(payload.message, payload.tip.amountTokens)))
       callbacksRef.current?.onTipCreated?.(payload)
     }
     const onMessageDeleted = (payload: { message: ChatMessageDto }) => {
       const deletedAt = payload.message.deletedAt ?? new Date().toISOString()
-      setMessages((prev) => upsertMessage(prev, { ...payload.message, deletedAt }))
+      setMessages((prev) =>
+        prev.map((event) =>
+          event.message.id === payload.message.id
+            ? { ...event, message: { ...event.message, deletedAt } }
+            : event,
+        ),
+      )
+      setPinnedMessage((prev) =>
+        prev?.id === payload.message.id ? { ...prev, deletedAt } : prev,
+      )
+    }
+    const onMessagePinned = (payload: { pinnedMessage?: ChatMessageDto | null }) => {
+      setPinnedMessage(payload.pinnedMessage ?? null)
+      callbacksRef.current?.onMessagePinned?.(payload)
     }
     const onUserRewarded = (payload: { reward: { type: string } }) => {
       callbacksRef.current?.onUserRewarded?.(payload)
@@ -69,13 +87,25 @@ export function useRoomSocket(
     const onPrivateRequestCreated = () => {
       callbacksRef.current?.onPrivateRequestCreated?.()
     }
+    const onPrivateRequestStatusChanged = (payload: { status: string }) => {
+      if (payload.status === 'ACCEPTED') setPrivateRequestStatus('ACCEPTED')
+      else if (payload.status === 'DECLINED') setPrivateRequestStatus('DECLINED')
+      else if (payload.status === 'PENDING') setPrivateRequestStatus('PENDING')
+      callbacksRef.current?.onPrivateRequestStatusChanged?.(payload)
+    }
     const onRoomEnded = (payload: { roomId: string; reason?: string }) => {
       callbacksRef.current?.onRoomEnded?.(payload)
     }
-    const onMessagePinned = (payload: { settings: { pinnedMessage?: ChatMessageDto | null } }) => {
-      const next = payload.settings.pinnedMessage ?? null
-      setPinnedMessage(next)
-      callbacksRef.current?.onMessagePinned?.({ pinnedMessage: next })
+    const onUserKicked = () => {
+      toast.error('You were removed from the room.')
+      navigate('/')
+    }
+    const onUserBanned = () => {
+      toast.error('You can no longer access this creator’s rooms.')
+      navigate('/')
+    }
+    const onUserMuted = () => {
+      toast.error('You have been muted.')
     }
 
     socket.on('connect', onConnect)
@@ -85,11 +115,15 @@ export function useRoomSocket(
     socket.on('chat:message', onChatMessage)
     socket.on('tip:created', onTipCreated)
     socket.on('room:message_deleted', onMessageDeleted)
+    socket.on('room:message_pinned', onMessagePinned)
     socket.on('room:user_rewarded', onUserRewarded)
     socket.on('goal:updated', onGoalUpdated)
     socket.on('private:request_created', onPrivateRequestCreated)
+    socket.on('private:request_status_changed', onPrivateRequestStatusChanged)
     socket.on('room:ended', onRoomEnded)
-    socket.on('room:message_pinned', onMessagePinned)
+    socket.on('room:user_kicked', onUserKicked)
+    socket.on('room:user_banned', onUserBanned)
+    socket.on('room:user_muted', onUserMuted)
 
     return () => {
       socket.emit('room:leave', { roomId })
@@ -99,15 +133,19 @@ export function useRoomSocket(
       socket.off('chat:message', onChatMessage)
       socket.off('tip:created', onTipCreated)
       socket.off('room:message_deleted', onMessageDeleted)
+      socket.off('room:message_pinned', onMessagePinned)
       socket.off('room:user_rewarded', onUserRewarded)
       socket.off('goal:updated', onGoalUpdated)
       socket.off('private:request_created', onPrivateRequestCreated)
+      socket.off('private:request_status_changed', onPrivateRequestStatusChanged)
       socket.off('room:ended', onRoomEnded)
-      socket.off('room:message_pinned', onMessagePinned)
+      socket.off('room:user_kicked', onUserKicked)
+      socket.off('room:user_banned', onUserBanned)
+      socket.off('room:user_muted', onUserMuted)
       socket.disconnect()
       socketRef.current = null
     }
-  }, [roomId])
+  }, [roomId, navigate])
 
   const sendMessage = useCallback(
     (body: string) =>
@@ -130,7 +168,7 @@ export function useRoomSocket(
             setSending(false)
             if (result?.ok) {
               if (result.message) {
-                setMessages((prev) => upsertMessage(prev, result.message!))
+                setMessages((prev) => upsertMessage(prev, toRoomEvent(result.message!)))
               }
               resolve()
               return
@@ -145,9 +183,23 @@ export function useRoomSocket(
   const markMessageDeleted = useCallback((messageId: string) => {
     const deletedAt = new Date().toISOString()
     setMessages((prev) =>
-      prev.map((message) => (message.id === messageId ? { ...message, deletedAt } : message)),
+      prev.map((event) =>
+        event.message.id === messageId
+          ? { ...event, message: { ...event.message, deletedAt } }
+          : event,
+      ),
     )
   }, [])
 
-  return { messages, viewerCount, pinnedMessage, connected, sending, sendMessage, markMessageDeleted }
+  return {
+    messages,
+    viewerCount,
+    pinnedMessage,
+    connected,
+    sending,
+    privateRequestStatus,
+    setPrivateRequestStatus,
+    sendMessage,
+    markMessageDeleted,
+  }
 }

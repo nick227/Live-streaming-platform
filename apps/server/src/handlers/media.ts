@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { MediaService, formatMedia } from '../services/MediaService'
 import { formatRoom } from '../services/RoomService'
 
@@ -21,7 +22,7 @@ export async function uploadMedia(request: any, reply: any) {
   }
 
   if (!fileField || !type) {
-    throw { statusCode: 422, message: 'file and type are required' }
+    throw httpError(422, 'file and type are required')
   }
 
   const asset = await mediaService.upload(
@@ -44,7 +45,7 @@ export async function captureRoomThumbnail(request: any, reply: any) {
     }
   }
 
-  if (!imageField) throw { statusCode: 422, message: 'image is required' }
+  if (!imageField) throw httpError(422, 'image is required')
 
   const { media, room } = await mediaService.captureRoomThumbnail(
     request.user.id,

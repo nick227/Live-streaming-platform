@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { encodeCursor, decodeCursor, normalizeLimit } from '../lib/pagination'
 import { formatLedgerEntry } from '../services/WalletService'
@@ -8,10 +9,10 @@ export async function getCreatorEarnings(request: any, reply: any) {
   const cursorPayload = decodeCursor(cursor)
 
   const creator = await db.creatorProfile.findUnique({ where: { userId: request.user.id } })
-  if (!creator) throw { statusCode: 404, message: 'Creator profile not found' }
+  if (!creator) throw httpError(404, 'Creator profile not found')
 
   const wallet = await db.wallet.findUnique({ where: { userId: request.user.id } })
-  if (!wallet) throw { statusCode: 404, message: 'Wallet not found' }
+  if (!wallet) throw httpError(404, 'Wallet not found')
 
   const entries = await db.ledgerEntry.findMany({
     where: {

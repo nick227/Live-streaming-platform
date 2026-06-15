@@ -1,0 +1,14 @@
+# Railway config for the server service.
+# The web app is deployed separately — see docs/railway.md.
+
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter server build"
+
+[deploy]
+startCommand = "node apps/server/dist/index.js"
+releaseCommand = "pnpm db:migrate"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

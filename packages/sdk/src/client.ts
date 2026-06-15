@@ -11,7 +11,7 @@ let _client: ReturnType<typeof createClient<paths>> | null = null
 export function createApiClient(config: ClientConfig) {
   const client = createClient<paths>({
     baseUrl: config.baseUrl,
-    credentials: 'include',  // send httpOnly session cookie automatically
+    credentials: 'include',
   })
 
   if (config.getToken) {
@@ -43,4 +43,18 @@ export class ApiError extends Error {
     super(message)
     this.name = 'ApiError'
   }
+}
+
+/** Call after every openapi-fetch request. Throws ApiError on failure, returns data on success. */
+export function unwrap<T>(result: { data?: T; error?: unknown; response?: Response }): T {
+  const { data, error, response } = result
+  if (error) {
+    const status = response?.status ?? 500
+    const message =
+      (error as any)?.error ??
+      (error as any)?.message ??
+      (response?.status === 401 ? 'Unauthorized' : 'Request failed')
+    throw new ApiError(status, message)
+  }
+  return data!
 }

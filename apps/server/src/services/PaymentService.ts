@@ -1,10 +1,20 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { createHash } from 'crypto'
 
 export class PaymentService {
   async createCcbillCheckout(userId: string, tokenPackId: string) {
+    const clientAccNum = process.env.CCBILL_CLIENT_ACCOUNT_NUM ?? ''
+    const clientSubNum = process.env.CCBILL_CLIENT_SUB_ACCOUNT_NUM ?? ''
+    const _flexId = process.env.CCBILL_FLEX_ID ?? ''
+    const salt = process.env.CCBILL_SALT ?? ''
+
+    if (!clientAccNum || !clientSubNum || !_flexId || !salt) {
+      throw httpError(503, 'Token purchases are disabled until payments are configured')
+    }
+
     const pack = await db.tokenPack.findUnique({ where: { id: tokenPackId } })
-    if (!pack || !pack.isActive) throw { statusCode: 404, message: 'Token pack not found' }
+    if (!pack || !pack.isActive) throw httpError(404, 'Token pack not found')
 
     const txn = await db.paymentTransaction.create({
       data: {
@@ -19,11 +29,6 @@ export class PaymentService {
     })
 
     // Build CCBill FlexForms URL
-    const clientAccNum = process.env.CCBILL_CLIENT_ACCOUNT_NUM ?? ''
-    const clientSubNum = process.env.CCBILL_CLIENT_SUB_ACCOUNT_NUM ?? ''
-    const _flexId = process.env.CCBILL_FLEX_ID ?? ''
-    const salt = process.env.CCBILL_SALT ?? ''
-
     const amountStr = (pack.priceCents / 100).toFixed(2)
     const initialPeriod = '2'
     const currencyCode = '840'
@@ -66,7 +71,7 @@ export class PaymentService {
     const expected = createHash('md5').update(verificationStr).digest('hex')
 
     if (digest !== expected) {
-      throw { statusCode: 400, message: 'Invalid webhook signature' }
+      throw httpError(400, 'Invalid webhook signature')
     }
 
     const txnId = body['custom[txnId]'] ?? body.customRef
@@ -124,7 +129,7 @@ export class PaymentService {
             userId: txn.userId,
             type: 'TOKEN_PURCHASE',
             amountTokens: tokensToCredit,
-            balanceAfter: wallet.tokenBalance + tokensToCredit,
+            balanceAfter: wallet.tokenBalance,
             paymentTransactionId: txnId,
             description: `Purchased ${pack.name}`,
           },

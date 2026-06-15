@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import * as argon2 from 'argon2'
 import { randomUUID } from 'crypto'
@@ -77,13 +78,13 @@ export class AuthService {
 
   async login(data: { email: string; password: string }) {
     const user = await db.user.findUnique({ where: { email: data.email } })
-    if (!user) throw { statusCode: 401, message: 'Invalid credentials' }
+    if (!user) throw httpError(401, 'Invalid credentials')
 
     const valid = await argon2.verify(user.passwordHash, data.password)
-    if (!valid) throw { statusCode: 401, message: 'Invalid credentials' }
+    if (!valid) throw httpError(401, 'Invalid credentials')
 
-    if (user.status === 'DELETED' || user.deletedAt) throw { statusCode: 403, message: 'Account deactivated' }
-    if (user.suspendedAt || user.status === 'SUSPENDED') throw { statusCode: 403, message: 'Account suspended' }
+    if (user.status === 'DELETED' || user.deletedAt) throw httpError(403, 'Account deactivated')
+    if (user.suspendedAt || user.status === 'SUSPENDED') throw httpError(403, 'Account suspended')
 
     const session = await this._createSession(user.id)
     return { user, token: session.token }

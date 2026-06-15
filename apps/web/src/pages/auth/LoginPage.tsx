@@ -32,9 +32,15 @@ export function LoginPage() {
         onSubmit={async (data) => {
           try {
             await mutation.mutateAsync(data)
-            navigate('/')
-          } catch {
-            toast.error('Invalid email or password')
+            navigate('/', { replace: true })
+          } catch (err: any) {
+            if (err?.status === 401) {
+              toast.error('Invalid email or password')
+            } else if (err?.status === 403) {
+              toast.error(err?.message ?? 'Account suspended or deactivated')
+            } else {
+              toast.error(err?.message ?? 'Login failed')
+            }
           }
         }}
         isLoading={mutation.isPending}

@@ -9,11 +9,12 @@ import { cn } from '@/lib/utils'
 export type FieldConfig = {
   name: string
   label: string
-  type: 'text' | 'email' | 'password' | 'textarea' | 'url' | 'tel'
+  type: 'text' | 'email' | 'password' | 'textarea' | 'url' | 'tel' | 'select'
   placeholder?: string
   voice?: boolean
   required?: boolean
   rows?: number
+  options?: { label: string; value: string }[]
 }
 
 interface FormProps<T extends Record<string, unknown>> {
@@ -75,6 +76,16 @@ export function Form<T extends Record<string, unknown>>({
                 voice={field.voice}
                 onVoiceResult={(t) => setValue(field.name as any, t as any)}
               />
+            ) : field.type === 'select' ? (
+              <select
+                {...register(field.name as any)}
+                id={id}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {field.options?.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             ) : (
               <Input
                 {...register(field.name as any)}

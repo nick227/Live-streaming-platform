@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { createWriteStream, mkdirSync } from 'fs'
 import { resolve, extname } from 'path'
@@ -64,12 +65,12 @@ export class MediaService {
     meta?: { creatorId?: string; roomId?: string },
   ) {
     if (!ALLOWED_MIME.has(file.mimetype)) {
-      throw { statusCode: 422, message: 'Unsupported file type' }
+      throw httpError(422, 'Unsupported file type')
     }
 
     // Enforce size cap — bytesRead is populated by @fastify/multipart after the stream is consumed
     if (file.bytesRead !== undefined && file.bytesRead > MAX_FILE_BYTES) {
-      throw { statusCode: 413, message: 'File too large — maximum size is 10 MB' }
+      throw httpError(413, 'File too large — maximum size is 10 MB')
     }
 
     const ext = extname(file.filename) || '.jpg'
@@ -103,8 +104,8 @@ export class MediaService {
       where: { id: roomId },
       include: { creator: true },
     })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
-    if (room.creator.userId !== creatorUserId) throw { statusCode: 403, message: 'Forbidden' }
+    if (!room) throw httpError(404, 'Room not found')
+    if (room.creator.userId !== creatorUserId) throw httpError(403, 'Forbidden')
 
     const asset = await this.upload(creatorUserId, file, 'ROOM_THUMBNAIL_CAPTURE', { roomId })
 

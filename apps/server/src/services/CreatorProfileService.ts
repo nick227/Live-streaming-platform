@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 
 const PROFILE_INCLUDE = { user: { select: { displayName: true } } }
@@ -5,13 +6,13 @@ const PROFILE_INCLUDE = { user: { select: { displayName: true } } }
 export class CreatorProfileService {
   async getByUserId(userId: string) {
     const profile = await db.creatorProfile.findUnique({ where: { userId }, include: PROFILE_INCLUDE })
-    if (!profile) throw { statusCode: 404, message: 'Creator profile not found' }
+    if (!profile) throw httpError(404, 'Creator profile not found')
     return profile
   }
 
   async getOrCreateByUserId(userId: string) {
     const user = await db.user.findUnique({ where: { id: userId } })
-    if (!user) throw { statusCode: 404, message: 'User not found' }
+    if (!user) throw httpError(404, 'User not found')
 
     const existing = await db.creatorProfile.findUnique({ where: { userId }, include: PROFILE_INCLUDE })
     if (existing) return existing
@@ -44,7 +45,7 @@ export class CreatorProfileService {
     },
   ) {
     const existing = await db.creatorProfile.findUnique({ where: { userId } })
-    if (!existing) throw { statusCode: 404, message: 'Creator profile not found' }
+    if (!existing) throw httpError(404, 'Creator profile not found')
 
     return db.creatorProfile.update({
       where: { userId },

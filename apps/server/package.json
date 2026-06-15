@@ -5,7 +5,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run",
+    "wallet:reconcile": "tsx src/scripts/reconcile-wallets.ts",
+    "test": "tsx src/__tests__/helpers/prepare-test-db.ts && vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts"
   },

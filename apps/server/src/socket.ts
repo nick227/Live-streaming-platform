@@ -37,7 +37,15 @@ export function attachSocketIO(server: FastifyInstance) {
     }
   })
 
-  // Track room membership for viewer count
+  async function decrementViewerCount(roomId: string) {
+    await db.room.updateMany({
+      where: { id: roomId, viewerCount: { gt: 0 } },
+      data: { viewerCount: { decrement: 1 } },
+    })
+    const room = await db.room.findUnique({ where: { id: roomId }, select: { viewerCount: true } })
+    if (room) io.to(`room:${roomId}`).emit('room:viewer_count', { roomId, viewerCount: room.viewerCount })
+  }
+
   io.on('connection', (socket) => {
     socket.on('room:join', async ({ roomId }, ack) => {
       try {
@@ -48,19 +56,36 @@ export function attachSocketIO(server: FastifyInstance) {
           return
         }
         socket.join(`room:${roomId}`)
-        const room = await db.room.findUnique({ where: { id: roomId }, select: { viewerCount: true } })
-        ack?.({ ok: true })
-        io.to(`room:${roomId}`).emit('room:viewer_count', {
-          roomId,
-          viewerCount: (room?.viewerCount ?? 0) + 1,
+
+        if (!socket.data.joinedRooms) socket.data.joinedRooms = new Set<string>()
+        ;(socket.data.joinedRooms as Set<string>).add(roomId)
+
+        const room = await db.room.update({
+          where: { id: roomId },
+          data: { viewerCount: { increment: 1 } },
+          select: { viewerCount: true },
         })
+        ack?.({ ok: true })
+        io.to(`room:${roomId}`).emit('room:viewer_count', { roomId, viewerCount: room.viewerCount })
       } catch {
+        socket.leave(`room:${roomId}`)
+        ;(socket.data.joinedRooms as Set<string> | undefined)?.delete(roomId)
         ack?.({ ok: false, error: 'Failed to join room' })
       }
     })
 
-    socket.on('room:leave', ({ roomId }) => {
+    socket.on('room:leave', async ({ roomId }) => {
       socket.leave(`room:${roomId}`)
+      ;(socket.data.joinedRooms as Set<string> | undefined)?.delete(roomId)
+      await decrementViewerCount(roomId).catch(() => {})
+    })
+
+    socket.on('disconnect', async () => {
+      const joinedRooms = socket.data.joinedRooms as Set<string> | undefined
+      if (!joinedRooms?.size) return
+      for (const roomId of joinedRooms) {
+        await decrementViewerCount(roomId).catch(() => {})
+      }
     })
 
     socket.on('chat:send', async ({ roomId, body }, ack) => {

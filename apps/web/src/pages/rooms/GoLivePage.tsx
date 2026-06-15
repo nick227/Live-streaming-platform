@@ -28,7 +28,7 @@ import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant } from '@liveki
 import { Track } from 'livekit-client'
 import { Camera, Coins, Image, Lock, Upload } from 'lucide-react'
 import { useRoomSocket } from '@/components/chat/useRoomSocket'
-import type { ChatMessageDto } from '@/components/chat/types'
+import type { ChatMessageDto, RoomEvent } from '@/components/chat/types'
 import { CreatorEventLog, ModerationButtons } from '@/components/chat/CreatorEventLog'
 import type { EventFilter } from '@/components/chat/eventFilter'
 
@@ -136,10 +136,9 @@ function LiveBroadcast({ roomName, token, serverUrl, isPrivate, onDisconnect }: 
   )
 }
 
-function tipAmountFromMessage(message: ChatMessageDto) {
-  if (message.type !== 'TIP_EVENT') return 0
-  const match = message.body.match(/Tipped (\d+) tokens/)
-  return match ? Number(match[1]) : 0
+function tipAmountFromEvent(event: RoomEvent) {
+  if (event.type !== 'tip') return 0
+  return event.amountTokens
 }
 
 function userLabel(user: ChatMessageDto['user']) {
@@ -238,16 +237,16 @@ export function GoLivePage() {
   const pinMessageMutation = usePinRoomMessage()
 
   const viewerMap = new Map<string, any>()
-  messages.forEach((message) => {
-    if (message.user?.id) viewerMap.set(message.user.id, message.user)
+  messages.forEach((event) => {
+    if (event.message.user?.id) viewerMap.set(event.message.user.id, event.message.user)
   })
   pendingRequests.forEach((request: any) => {
     const viewer = request.viewer ?? { id: request.viewerId, displayName: request.viewerId }
     if (viewer?.id) viewerMap.set(viewer.id, viewer)
   })
   const activeViewers = Array.from(viewerMap.values())
-  const recentTips = messages.filter((message) => message.type === 'TIP_EVENT').slice(-5).reverse()
-  const roomTokensEarned = messages.reduce((sum, message) => sum + tipAmountFromMessage(message), 0)
+  const recentTips = messages.filter((event) => event.type === 'tip').slice(-5).reverse()
+  const roomTokensEarned = messages.reduce((sum, event) => sum + tipAmountFromEvent(event), 0)
   const elapsedPrivateSeconds = privateStartedAt ? Math.max(0, Math.floor((now - privateStartedAt) / 1000)) : 0
   const elapsedPrivateMinutes = currentPrivateSession ? Math.max(1, Math.ceil(elapsedPrivateSeconds / 60)) : 0
   const privateCapturedEstimate = currentPrivateSession
@@ -489,9 +488,9 @@ export function GoLivePage() {
                 <p className="text-sm text-muted-foreground">No tips yet.</p>
               ) : (
                 recentTips.map((tip) => (
-                  <div key={tip.id} className="flex items-center justify-between rounded border border-border px-2 py-1 text-sm">
-                    <span>{userLabel(tip.user)}</span>
-                    <span className="font-medium">{tip.body}</span>
+                  <div key={tip.message.id} className="flex items-center justify-between rounded border border-border px-2 py-1 text-sm">
+                    <span>{userLabel(tip.message.user)}</span>
+                    <span className="font-medium">{tip.amountTokens} tokens</span>
                   </div>
                 ))
               )}

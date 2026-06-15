@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 
 export class CreatorMenuService {
@@ -32,8 +33,8 @@ export class CreatorMenuService {
   ) {
     const creator = await this._getCreator(userId)
     const item = await db.creatorMenuItem.findUnique({ where: { id: itemId } })
-    if (!item) throw { statusCode: 404, message: 'Menu item not found' }
-    if (item.creatorId !== creator.id) throw { statusCode: 403, message: 'Forbidden' }
+    if (!item) throw httpError(404, 'Menu item not found')
+    if (item.creatorId !== creator.id) throw httpError(403, 'Forbidden')
 
     return db.creatorMenuItem.update({ where: { id: itemId }, data })
   }
@@ -41,8 +42,8 @@ export class CreatorMenuService {
   async delete(userId: string, itemId: string) {
     const creator = await this._getCreator(userId)
     const item = await db.creatorMenuItem.findUnique({ where: { id: itemId } })
-    if (!item) throw { statusCode: 404, message: 'Menu item not found' }
-    if (item.creatorId !== creator.id) throw { statusCode: 403, message: 'Forbidden' }
+    if (!item) throw httpError(404, 'Menu item not found')
+    if (item.creatorId !== creator.id) throw httpError(403, 'Forbidden')
 
     await db.creatorMenuItem.delete({ where: { id: itemId } })
     return { ok: true }
@@ -50,7 +51,7 @@ export class CreatorMenuService {
 
   private async _getCreator(userId: string) {
     const creator = await db.creatorProfile.findUnique({ where: { userId } })
-    if (!creator) throw { statusCode: 403, message: 'Creator profile required' }
+    if (!creator) throw httpError(403, 'Creator profile required')
     return creator
   }
 }

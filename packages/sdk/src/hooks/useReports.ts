@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { getApiClient, ApiError } from '../client'
+import { getApiClient, unwrap } from '../client'
 
 export function useCreateReport() {
   return useMutation({
@@ -11,10 +11,6 @@ export function useCreateReport() {
       targetMediaId?: string
       reason: string
       description?: string
-    }) => {
-      const { data, error } = await getApiClient().POST('/reports', { body })
-      if (error) throw new ApiError(500, 'Failed to submit report')
-      return data
-    },
+    }) => unwrap(await getApiClient().POST('/reports', { body })),
   })
 }

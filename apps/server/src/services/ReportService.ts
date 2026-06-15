@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { encodeCursor, decodeCursor, normalizeLimit } from '../lib/pagination'
 
@@ -69,7 +70,7 @@ export class ReportService {
     data: { status: 'REVIEWED' | 'ACTIONED' | 'DISMISSED'; adminNotes?: string },
   ) {
     const report = await db.report.findUnique({ where: { id: reportId } })
-    if (!report) throw { statusCode: 404, message: 'Report not found' }
+    if (!report) throw httpError(404, 'Report not found')
 
     const updated = await db.report.update({
       where: { id: reportId },

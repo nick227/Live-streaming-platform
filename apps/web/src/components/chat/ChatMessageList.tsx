@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { ChatMessageRow } from './ChatMessageRow'
-import type { ChatMessageDto } from './types'
+import type { RoomEvent } from './types'
 
-export function ChatMessageList({ messages }: { messages: ChatMessageDto[] }) {
+export function ChatMessageList({ messages }: { messages: RoomEvent[] }) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, messages[messages.length - 1]?.id])
+  }, [messages.length, messages[messages.length - 1]?.message.id])
 
   return (
     <Card className="flex-1 min-h-0 overflow-hidden">
@@ -20,7 +20,7 @@ export function ChatMessageList({ messages }: { messages: ChatMessageDto[] }) {
         {messages.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center pt-8">No messages yet. Say hello!</p>
         ) : (
-          messages.map((message) => <ChatMessageRow key={message.id} message={message} showTimestamp />)
+          messages.map((event) => <ChatMessageRow key={event.message.id} event={event} showTimestamp />)
         )}
         <div ref={bottomRef} />
       </CardContent>

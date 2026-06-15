@@ -61,6 +61,12 @@ This package captures the product, technical, design, and operational decisions 
 - `06-operations/admin-operations-spec.md`
 - `06-operations/compliance-moderation-outline.md`
 
+### Deployment
+- `architecture.md` — system overview
+- `setup.md` — local dev setup
+- `deployment.md` — general deployment reference
+- `railway.md` — Railway go-live guide (step-by-step)
+
 ## Recommended next step
 
 Turn this package into an implementation backlog by creating tickets for: auth shell, creator studio setup checklist, LiveKit room token issuance, Socket.IO room chat, wallet/ledger, CCBill checkout/webhooks, private-session flow, and admin operations views.

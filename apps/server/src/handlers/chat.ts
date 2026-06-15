@@ -1,3 +1,4 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { normalizeLimit } from '../lib/pagination'
 
@@ -6,7 +7,7 @@ export async function getRoomMessages(request: any, reply: any) {
   const limit = normalizeLimit(request.query?.limit, 100, 50)
 
   const room = await db.room.findUnique({ where: { id: roomId }, select: { id: true } })
-  if (!room) throw { statusCode: 404, message: 'Room not found' }
+  if (!room) throw httpError(404, 'Room not found')
 
   const messages = await db.chatMessage.findMany({
     where: { roomId, deletedAt: null },
@@ -43,7 +44,7 @@ export async function getRoomMenu(request: any, reply: any) {
       goal: true,
     },
   })
-  if (!room) throw { statusCode: 404, message: 'Room not found' }
+  if (!room) throw httpError(404, 'Room not found')
 
   return reply.send({
     data: {
@@ -56,14 +57,16 @@ export async function getRoomMenu(request: any, reply: any) {
         isActive: item.isActive,
         sortOrder: item.sortOrder,
       })),
-      goal: room.goal
+      ...(room.goal
         ? {
-            id: room.goal.id,
-            title: room.goal.title,
-            targetTokens: room.goal.targetTokens,
-            currentTokens: room.goal.currentTokens,
+            goal: {
+              id: room.goal.id,
+              title: room.goal.title,
+              targetTokens: room.goal.targetTokens,
+              currentTokens: room.goal.currentTokens,
+            },
           }
-        : null,
+        : {}),
     },
   })
 }

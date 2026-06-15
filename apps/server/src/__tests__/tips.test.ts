@@ -1,18 +1,20 @@
-// Generated from openapi.yaml — fill in seeds and assertions.
-// Run `pnpm test:generate` to add stubs for new routes.
-// Both test users are pre-seeded: use testOtherUserId for cross-user permission tests.
 import { describe, it, expect } from 'vitest'
-import { buildTestApp, asAuth, validateResponse, testUserId, testOtherUserId } from './helpers'
+import { buildTestApp, asAuth, validateResponse, testUserId, testOtherUserId, createTestCreator, createLiveRoom, createTip, createWallet } from './helpers'
+import { db } from '@streamyolo/db'
 
 const app = buildTestApp()
 
 describe('getRoomMenu', () => {
   it('GET /rooms/{roomId}/menu', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    const creator = await createTestCreator(testOtherUserId)
+    const room = await createLiveRoom(creator.id)
+    await db.creatorMenuItem.create({
+      data: { creatorId: creator.id, label: 'Shoutout', tokenAmount: 50, isActive: true }
+    })
+    
     const res = await app.inject({
       method: 'GET',
-      url: '/rooms/00000000-0000-0000-0000-000000000001/menu',
-      // payload: {},
+      url: `/rooms/${room.id}/menu`,
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('getRoomMenu', 200, res.json())
@@ -26,12 +28,15 @@ describe('createTip', () => {
   })
 
   it('POST /rooms/{roomId}/tips', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    const creator = await createTestCreator(testOtherUserId)
+    const room = await createLiveRoom(creator.id)
+    await createWallet(testUserId, 1000)
+
     const res = await app.inject({
       method: 'POST',
-      url: '/rooms/00000000-0000-0000-0000-000000000001/tips',
+      url: `/rooms/${room.id}/tips`,
       headers: asAuth(testUserId),
-      // payload: {},
+      payload: { amountTokens: 50, requestType: 'GENERAL', requestText: 'Great job!' },
     })
     expect(res.statusCode).toBe(201)
     await validateResponse('createTip', 201, res.json())
@@ -45,12 +50,16 @@ describe('acknowledgeTip', () => {
   })
 
   it('POST /creator/tips/{tipId}/acknowledge', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    const creator = await createTestCreator(testUserId)
+    const room = await createLiveRoom(creator.id)
+    const tip = await db.tip.create({
+      data: { roomId: room.id, fromUserId: testOtherUserId, toCreatorId: creator.id, amountTokens: 50, status: 'SENT', requestType: 'GENERAL' }
+    })
+
     const res = await app.inject({
       method: 'POST',
-      url: '/creator/tips/00000000-0000-0000-0000-000000000001/acknowledge',
+      url: `/creator/tips/${tip.id}/acknowledge`,
       headers: asAuth(testUserId),
-      // payload: {},
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('acknowledgeTip', 200, res.json())
@@ -64,12 +73,16 @@ describe('completeTip', () => {
   })
 
   it('POST /creator/tips/{tipId}/complete', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    const creator = await createTestCreator(testUserId)
+    const room = await createLiveRoom(creator.id)
+    const tip = await db.tip.create({
+      data: { roomId: room.id, fromUserId: testOtherUserId, toCreatorId: creator.id, amountTokens: 50, status: 'SENT', requestType: 'GENERAL' }
+    })
+
     const res = await app.inject({
       method: 'POST',
-      url: '/creator/tips/00000000-0000-0000-0000-000000000001/complete',
+      url: `/creator/tips/${tip.id}/complete`,
       headers: asAuth(testUserId),
-      // payload: {},
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('completeTip', 200, res.json())

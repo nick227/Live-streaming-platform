@@ -1,34 +1,26 @@
 import { cn } from '@/lib/utils'
 import { formatMessageTime } from './formatMessageTime'
-import type { ChatMessageDto } from './types'
+import type { RoomEvent } from './types'
 
-const SYSTEM_TYPES = new Set([
-  'SYSTEM_MESSAGE',
-  'AUTO_MESSAGE',
-  'GOAL_EVENT',
-  'MENU_EVENT',
-  'MODERATION_EVENT',
-])
-
-function displayName(message: ChatMessageDto) {
-  return message.user?.displayName ?? 'System'
+function displayName(event: RoomEvent) {
+  return event.message.user?.displayName ?? 'System'
 }
 
-function rowClassName(type: ChatMessageDto['type']) {
-  if (type === 'TIP_EVENT') return 'bg-amber-500/10 border-amber-500/30'
-  if (type === 'PRIVATE_REQUEST') return 'bg-purple-500/10 border-purple-500/30'
-  if (SYSTEM_TYPES.has(type)) return 'bg-muted/40 border-border/50'
+function rowClassName(type: RoomEvent['type']) {
+  if (type === 'tip') return 'bg-amber-500/10 border-amber-500/30'
+  if (type === 'moderation') return 'bg-destructive/10 border-destructive/30'
+  if (type === 'system') return 'bg-muted/40 border-border/50'
   return 'border-transparent'
 }
 
-export function ChatMessageRow({ message, showTimestamp = false }: { message: ChatMessageDto; showTimestamp?: boolean }) {
-  const removed = Boolean(message.deletedAt)
+export function ChatMessageRow({ event, showTimestamp = false }: { event: RoomEvent; showTimestamp?: boolean }) {
+  const removed = Boolean(event.message.deletedAt)
 
   return (
     <div
       className={cn(
         'rounded border px-2 py-1.5 text-sm',
-        rowClassName(message.type),
+        rowClassName(event.type),
         removed && 'opacity-60',
       )}
     >
@@ -36,16 +28,21 @@ export function ChatMessageRow({ message, showTimestamp = false }: { message: Ch
         <span
           className={cn(
             'font-medium shrink-0',
-            message.type === 'TIP_EVENT' ? 'text-amber-600 dark:text-amber-400' : 'text-primary',
+            event.type === 'tip' ? 'text-amber-600 dark:text-amber-400' : 'text-primary',
           )}
         >
-          {displayName(message)}:
+          {displayName(event)}:
         </span>
-        <span className={cn('break-words min-w-0', SYSTEM_TYPES.has(message.type) && 'text-muted-foreground italic')}>
-          {removed ? 'Message removed' : message.body}
+        <span className={cn('break-words min-w-0', event.type === 'system' && 'text-muted-foreground italic')}>
+          {removed ? 'Message removed' : event.message.body}
+          {event.type === 'tip' && !removed && (
+            <span className="ml-2 font-bold text-amber-500">
+              ({event.amountTokens} tokens)
+            </span>
+          )}
         </span>
         {showTimestamp && (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{formatMessageTime(message.createdAt)}</span>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{formatMessageTime(event.message.createdAt)}</span>
         )}
       </div>
     </div>

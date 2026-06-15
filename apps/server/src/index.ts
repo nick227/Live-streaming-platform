@@ -1,3 +1,4 @@
+import './lib/env'
 import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
@@ -8,13 +9,18 @@ import openapiGlue from 'fastify-openapi-glue'
 import { load } from 'js-yaml'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
 import type { ServerToClientEvents, ClientToServerEvents } from '@streamyolo/shared'
 import { db } from '@streamyolo/db'
 import * as handlers from './handlers'
 import * as security from './plugins/security'
 import { PrivateSessionService } from './services/PrivateSessionService'
+import { attachSocketIO } from './socket'
+
+if (!process.env.DATABASE_URL) {
+  console.error('[startup] DATABASE_URL is not set. Add it to your .env file:\n  DATABASE_URL=mysql://root:@localhost:3306/streamyolo_dev')
+  process.exit(1)
+}
 
 const server = Fastify({ logger: true })
 
@@ -23,7 +29,7 @@ const spec = load(readFileSync(specPath, 'utf-8')) as object
 
 async function main() {
   await server.register(cors, {
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+    origin: process.env.NODE_ENV === 'production' ? process.env.CORS_ORIGIN : true,
     credentials: true,
   })
 
@@ -52,7 +58,7 @@ async function main() {
 
   await server.register(openapiGlue, {
     specification: specPath,
-    service: handlers,
+    serviceHandlers: handlers,
     securityHandlers: security,
     noAdditional: true,
   } as any)
@@ -60,95 +66,16 @@ async function main() {
   server.get('/health', async () => ({ status: 'ok' }))
 
   // Build HTTP server and attach Socket.IO
-  const httpServer = createServer(server.server)
-  const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
-    cors: {
-      origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
-      credentials: true,
-    },
-  })
-
-  // Verify session token on every socket connection
-  io.use(async (socket, next) => {
-    const token = socket.handshake.auth?.token as string | undefined
-    if (!token) return next(new Error('Unauthorized'))
-    try {
-      const session = await db.session.findUnique({
-        where: { token },
-        include: { user: true },
-      })
-      if (!session || session.expiresAt < new Date()) return next(new Error('Unauthorized'))
-      if (session.user.suspendedAt) return next(new Error('Account suspended'))
-      ;(socket as any).userId = session.user.id
-      next()
-    } catch {
-      next(new Error('Unauthorized'))
-    }
-  })
-
-  // Expire stale REQUESTED private sessions every minute
-  setInterval(() => {
-    PrivateSessionService.expireStaleRequested().catch((err) => server.log.error(err))
-  }, 60_000)
-
-  // Track room membership for viewer count
-  io.on('connection', (socket) => {
-    socket.on('room:join', async ({ roomId }, ack) => {
-      try {
-        socket.join(`room:${roomId}`)
-        const room = await db.room.findUnique({ where: { id: roomId }, select: { viewerCount: true } })
-        ack?.({ ok: true })
-        io.to(`room:${roomId}`).emit('room:viewer_count', {
-          roomId,
-          viewerCount: (room?.viewerCount ?? 0) + 1,
-        })
-      } catch {
-        ack?.({ ok: false, error: 'Failed to join room' })
-      }
-    })
-
-    socket.on('room:leave', ({ roomId }) => {
-      socket.leave(`room:${roomId}`)
-    })
-
-    socket.on('chat:send', async ({ roomId, body }, ack) => {
-      // Chat messages go through the REST tip handler and are broadcast there.
-      // This socket event is a real-time shortcut for simple chat — no token deduction.
-      try {
-        const msg = await db.chatMessage.create({
-          data: {
-            roomId,
-            type: 'USER_MESSAGE',
-            body,
-          },
-          include: { user: { select: { id: true, username: true, displayName: true } } },
-        })
-        const dto = {
-          id: msg.id,
-          roomId: msg.roomId,
-          user: msg.user
-            ? { id: msg.user.id, username: msg.user.username, displayName: msg.user.displayName ?? undefined }
-            : undefined,
-          type: msg.type as any,
-          body: msg.body,
-          createdAt: msg.createdAt.toISOString(),
-        }
-        io.to(`room:${roomId}`).emit('chat:message', { message: dto })
-        ack?.({ ok: true, message: dto })
-      } catch {
-        ack?.({ ok: false, error: 'Failed to send message' })
-      }
-    })
-  })
-
-  // Attach io to fastify so handlers can emit events
-  ;(server as any).io = io
+  attachSocketIO(server)
 
   await server.ready()
 
   const port = Number(process.env.PORT ?? 3001)
-  httpServer.listen(port, '0.0.0.0', () => {
-    server.log.info(`Server listening on port ${port}`)
+  server.listen({ port, host: '0.0.0.0' }, (err) => {
+    if (err) {
+      server.log.error(err)
+      process.exit(1)
+    }
   })
 }
 

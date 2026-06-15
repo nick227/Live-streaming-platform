@@ -1,18 +1,30 @@
+import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { encodeCursor, decodeCursor, normalizeLimit } from '../lib/pagination'
+import { CREATOR_INCLUDE } from './RoomService'
 
 export class AdminService {
   // ── Overview ───────────────────────────────────────────────────────────────
 
   async getOverview() {
-    const [totalUsers, totalCreators, liveRooms, pendingReports, pendingMedia] = await Promise.all([
+    const [totalUsers, totalCreators, liveRoomCount, pendingReports, pendingPayments, activePrivateSessions] = await Promise.all([
       db.user.count(),
       db.creatorProfile.count(),
       db.room.count({ where: { status: 'LIVE' } }),
       db.report.count({ where: { status: 'PENDING' } }),
-      db.mediaAsset.count({ where: { status: 'PENDING' } }),
+      db.paymentTransaction.count({ where: { status: 'PENDING' } }),
+      db.privateSession.count({ where: { status: 'ACTIVE' } }),
     ])
-    return { totalUsers, totalCreators, liveRooms, pendingReports, pendingMedia }
+    return { 
+      totalUsers, 
+      totalCreators, 
+      liveRoomCount, 
+      pendingReports, 
+      pendingPayments, 
+      activePrivateSessions,
+      totalTokensPurchasedToday: 0,
+      totalRevenueCentsToday: 0
+    }
   }
 
   // ── Rooms ──────────────────────────────────────────────────────────────────
@@ -33,7 +45,7 @@ export class AdminService {
             }
           : {}),
       },
-      include: { creator: { select: { id: true, userId: true, user: { select: { displayName: true } } } } },
+      include: { creator: CREATOR_INCLUDE, goal: true },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     })
@@ -51,15 +63,15 @@ export class AdminService {
   async getRoom(roomId: string) {
     const room = await db.room.findUnique({
       where: { id: roomId },
-      include: { creator: { select: { id: true, userId: true, user: { select: { displayName: true } } } }, goal: true },
+      include: { creator: CREATOR_INCLUDE, goal: true },
     })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
+    if (!room) throw httpError(404, 'Room not found')
     return room
   }
 
   async endRoom(adminId: string, roomId: string, reason?: string) {
     const room = await db.room.findUnique({ where: { id: roomId } })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
+    if (!room) throw httpError(404, 'Room not found')
 
     const [updated] = await db.$transaction([
       db.room.update({ where: { id: roomId }, data: { status: 'ENDED', endedAt: new Date() } }),
@@ -72,7 +84,7 @@ export class AdminService {
 
   async hideRoom(adminId: string, roomId: string, reason?: string) {
     const room = await db.room.findUnique({ where: { id: roomId } })
-    if (!room) throw { statusCode: 404, message: 'Room not found' }
+    if (!room) throw httpError(404, 'Room not found')
 
     const [updated] = await db.$transaction([
       db.room.update({ where: { id: roomId }, data: { status: 'HIDDEN' } }),
@@ -126,7 +138,7 @@ export class AdminService {
         wallet: true,
       },
     })
-    if (!user) throw { statusCode: 404, message: 'User not found' }
+    if (!user) throw httpError(404, 'User not found')
     return user
   }
 
@@ -239,7 +251,7 @@ export class AdminService {
       where: { id: paymentId },
       include: { tokenPack: true, user: { select: { id: true, username: true, email: true } } },
     })
-    if (!payment) throw { statusCode: 404, message: 'Payment not found' }
+    if (!payment) throw httpError(404, 'Payment not found')
     return payment
   }
 
@@ -250,7 +262,7 @@ export class AdminService {
       where: { userId },
       include: { ledgerEntries: { orderBy: { createdAt: 'desc' }, take: 50 } },
     })
-    if (!wallet) throw { statusCode: 404, message: 'Wallet not found' }
+    if (!wallet) throw httpError(404, 'Wallet not found')
     return wallet
   }
 
@@ -258,7 +270,7 @@ export class AdminService {
     let wallet = await db.wallet.findUnique({ where: { userId } })
     if (!wallet) wallet = await db.wallet.create({ data: { userId } })
 
-    const [updatedWallet] = await db.$transaction(async (tx: any) => {
+    const [updatedWallet, _, updatedLedgerEntry] = await db.$transaction(async (tx: any) => {
       const w = await tx.wallet.update({
         where: { userId },
         data: { tokenBalance: { increment: data.amountTokens } },
@@ -268,7 +280,7 @@ export class AdminService {
         data: { adminUserId: adminId, targetUserId: userId, type: 'ADJUST_WALLET', reason: data.reason },
       })
 
-      await tx.ledgerEntry.create({
+      const le = await tx.ledgerEntry.create({
         data: {
           walletId: wallet!.id,
           userId,
@@ -280,10 +292,10 @@ export class AdminService {
         },
       })
 
-      return [w, a]
+      return [w, a, le]
     })
 
-    return updatedWallet
+    return { wallet: updatedWallet, ledgerEntry: updatedLedgerEntry }
   }
 
   // ── Private sessions ───────────────────────────────────────────────────────
@@ -323,7 +335,7 @@ export class AdminService {
 
   async forceEndPrivateSession(adminId: string, sessionId: string, reason?: string) {
     const session = await db.privateSession.findUnique({ where: { id: sessionId } })
-    if (!session) throw { statusCode: 404, message: 'Session not found' }
+    if (!session) throw httpError(404, 'Session not found')
 
     const [updated] = await db.$transaction([
       db.privateSession.update({
@@ -369,13 +381,13 @@ export class AdminService {
 
   async approveMedia(adminId: string, mediaId: string) {
     const asset = await db.mediaAsset.findUnique({ where: { id: mediaId } })
-    if (!asset) throw { statusCode: 404, message: 'Media not found' }
+    if (!asset) throw httpError(404, 'Media not found')
     return db.mediaAsset.update({ where: { id: mediaId }, data: { status: 'APPROVED' } })
   }
 
   async hideMedia(adminId: string, mediaId: string, _reason?: string) {
     const asset = await db.mediaAsset.findUnique({ where: { id: mediaId } })
-    if (!asset) throw { statusCode: 404, message: 'Media not found' }
+    if (!asset) throw httpError(404, 'Media not found')
     return db.mediaAsset.update({ where: { id: mediaId }, data: { status: 'HIDDEN' } })
   }
 
@@ -413,7 +425,7 @@ export class AdminService {
 
   async reviewReport(adminId: string, reportId: string, data: { status: 'REVIEWED' | 'ACTIONED' | 'DISMISSED'; adminNotes?: string }) {
     const report = await db.report.findUnique({ where: { id: reportId } })
-    if (!report) throw { statusCode: 404, message: 'Report not found' }
+    if (!report) throw httpError(404, 'Report not found')
 
     return db.report.update({
       where: { id: reportId },

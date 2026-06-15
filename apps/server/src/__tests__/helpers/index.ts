@@ -1,6 +1,9 @@
+import { httpError } from '../../lib/errors'
+import '../../lib/env'
 import { beforeAll, beforeEach, afterAll } from 'vitest'
 import Fastify, { type FastifyInstance } from 'fastify'
 import cookie from '@fastify/cookie'
+import multipart from '@fastify/multipart'
 import openapiGlue from 'fastify-openapi-glue'
 import SwaggerParser from '@apidevtools/swagger-parser'
 import Ajv from 'ajv'
@@ -11,6 +14,7 @@ import * as handlers from '../../handlers'
 
 export const testUserId      = '00000000-0000-0000-0000-000000000001'
 export const testOtherUserId = '00000000-0000-0000-0000-000000000002'
+export const testAdminId     = '00000000-0000-0000-0000-admin0000000'
 
 const specPath = resolve(__dirname, '../../../../../packages/api-spec/openapi.yaml')
 
@@ -24,6 +28,7 @@ const ajv = new Ajv({ allErrors: true, strict: false })
 addFormats(ajv)
 
 async function seedTestUsers() {
+  await cleanupTestData()
   await db.user.createMany({
     data: [
       {
@@ -40,10 +45,54 @@ async function seedTestUsers() {
         username: 'bob',
         displayName: 'Bob',
       },
+      {
+        id: testAdminId,
+        email: 'admin@test.local',
+        passwordHash: 'x',
+        username: 'admin',
+        displayName: 'Admin',
+        role: 'ADMIN',
+      },
     ],
     skipDuplicates: true,
   })
 }
+
+async function cleanupTestData() {
+  await db.ledgerEntry.deleteMany()
+  await db.roomModerationAction.deleteMany()
+  await db.creatorUserReward.deleteMany()
+  await db.creatorUserBan.deleteMany()
+  await db.roomChatSettings.deleteMany()
+  await db.adminAction.deleteMany()
+  await db.report.deleteMany()
+  await db.tip.deleteMany()
+  await db.privateSession.deleteMany()
+  await db.roomMenuItem.deleteMany()
+  await db.roomGoal.deleteMany()
+  await db.chatMessage.deleteMany()
+  await db.room.deleteMany()
+  await db.creatorMenuItem.deleteMany()
+  await db.creatorProfile.deleteMany()
+  await db.mediaAsset.deleteMany()
+  await db.paymentTransaction.deleteMany()
+  await db.tokenPack.deleteMany()
+  await db.wallet.deleteMany()
+  await db.session.deleteMany()
+  await db.user.deleteMany({
+    where: {
+      id: {
+        notIn: [
+          testUserId,
+          testOtherUserId,
+          testAdminId,
+        ],
+      },
+    },
+  })
+}
+
+import { attachSocketIO } from '../../socket'
 
 export function buildTestApp() {
   const app: FastifyInstance = Fastify()
@@ -52,24 +101,26 @@ export function buildTestApp() {
     await app.register(cookie, {
       secret: process.env.COOKIE_SECRET ?? 'test-cookie-secret-at-least-32-characters',
     })
+    await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } })
     await app.register(openapiGlue, {
       specification: specPath,
-      service: handlers,
+      serviceHandlers: handlers,
       securityHandlers: {
         async bearerAuth(request: any) {
           const id = request.headers.authorization?.replace('Bearer ', '')
-          if (!id) throw { statusCode: 401, message: 'Unauthorized' }
+          if (!id) throw httpError(401, 'Unauthorized')
           request.user = await db.user.findUniqueOrThrow({ where: { id } })
         },
         async adminAuth(request: any) {
           const id = request.headers.authorization?.replace('Bearer ', '')
-          if (!id) throw { statusCode: 401, message: 'Unauthorized' }
+          if (!id) throw httpError(401, 'Unauthorized')
           request.user = await db.user.findUniqueOrThrow({ where: { id } })
-          if (request.user.role !== 'ADMIN') throw { statusCode: 403, message: 'Forbidden' }
+          if (request.user.role !== 'ADMIN') throw httpError(403, 'Forbidden')
         },
       },
       noAdditional: true,
     } as any)
+    attachSocketIO(app)
     await app.ready()
   })
 
@@ -103,4 +154,146 @@ export async function validateResponse(operationId: string, status: number, body
       return
     }
   }
+}
+
+// ── Reusable Seed Helpers ──────────────────────────────────────────────────
+
+export async function createTestCreator(userId: string = testUserId) {
+  return db.creatorProfile.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      bio: 'Test bio',
+      privateRulesText: 'No recording allowed.',
+      privateRateTokensPerMinute: 10,
+      minPrivateMinutes: 5,
+      privateViewerCamRequired: false,
+      privateScreenShareAllowed: true,
+      status: 'ACTIVE',
+    },
+  })
+}
+
+export async function createActiveCreator(userId: string = testUserId) {
+  return db.creatorProfile.create({
+    data: {
+      userId,
+      status: 'ACTIVE',
+      privateRateTokensPerMinute: 10,
+      privateRulesText: 'No rules',
+    }
+  })
+}
+
+export async function createRoom(creatorOrUserId: string) {
+  let creator = await db.creatorProfile.findUnique({ where: { userId: creatorOrUserId } })
+  if (!creator) creator = await db.creatorProfile.findUniqueOrThrow({ where: { id: creatorOrUserId } })
+  return db.room.create({ data: { creatorId: creator.id, title: 'Test Room', slug: `test-room-${Math.random()}`, livekitRoomName: `lk-${Math.random()}` } })
+}
+
+export async function createLiveRoom(creatorOrUserId: string) {
+  let creator = await db.creatorProfile.findUnique({ where: { userId: creatorOrUserId } })
+  if (!creator) creator = await db.creatorProfile.findUniqueOrThrow({ where: { id: creatorOrUserId } })
+  return db.room.create({
+    data: {
+      creatorId: creator.id,
+      title: 'Live Room',
+      slug: `live-room-${Math.random()}`,
+      livekitRoomName: `lk-live-${Math.random()}`,
+      status: 'LIVE',
+      thumbnailMediaId: 'dummy-media',
+    }
+  })
+}
+
+export async function createWallet(userId: string = testUserId, balance: number = 1000) {
+  return db.wallet.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      tokenBalance: balance,
+    },
+  })
+}
+
+export async function createTip(roomId: string, userId: string = testUserId) {
+  const room = await db.room.findUniqueOrThrow({ where: { id: roomId } })
+  return db.tip.create({
+    data: {
+      roomId,
+      fromUserId: userId,
+      toCreatorId: room.creatorId,
+      amountTokens: 50,
+      requestText: 'Nice stream!',
+      requestType: 'CUSTOM',
+      status: 'COMPLETED'
+    }
+  })
+}
+
+export async function createPrivateSession(roomId: string, viewerId: string = testUserId) {
+  const room = await db.room.findUniqueOrThrow({ where: { id: roomId } })
+  const reservedTokens = 50
+  await db.wallet.upsert({
+    where: { userId: viewerId },
+    update: {
+      tokenBalance: { decrement: reservedTokens },
+      reservedTokenBalance: { increment: reservedTokens },
+    },
+    create: {
+      userId: viewerId,
+      tokenBalance: 1000 - reservedTokens,
+      reservedTokenBalance: reservedTokens,
+    },
+  })
+  return db.privateSession.create({
+    data: {
+      publicRoomId: roomId,
+      creatorId: room.creatorId,
+      viewerId,
+      status: 'REQUESTED',
+      rateTokensPerMinute: 10,
+      minMinutes: 5,
+      reservedTokens,
+    }
+  })
+}
+
+export async function createMediaAsset(userId: string = testUserId) {
+  return db.mediaAsset.create({
+    data: {
+      ownerUserId: userId,
+      type: 'AVATAR',
+      url: 'https://example.com/image.jpg',
+      status: 'PENDING'
+    }
+  })
+}
+
+export async function createPayment(userId: string = testUserId) {
+  const pack = await db.tokenPack.create({ data: { name: 'Test', priceCents: 1000, tokenAmount: 100 } })
+  return db.paymentTransaction.create({
+    data: {
+      userId,
+      tokenPackId: pack.id,
+      provider: 'CCBILL',
+      providerTxnId: `txn_${Date.now()}_${Math.random()}`,
+      amountCents: 1000,
+      status: 'APPROVED'
+    }
+  })
+}
+
+export async function createReport(targetUserId: string, reporterId: string = testUserId) {
+  return db.report.create({
+    data: {
+      reporterId,
+      targetType: 'USER',
+      targetUserId,
+      reason: 'INAPPROPRIATE',
+      status: 'PENDING'
+    }
+  })
 }

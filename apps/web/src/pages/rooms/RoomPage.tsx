@@ -11,6 +11,7 @@ import { RoomChatPanel } from '@/components/chat/RoomChatPanel'
 import { useRoomSocket } from '@/components/chat/useRoomSocket'
 import type { ChatMessageDto } from '@/components/chat/types'
 import { RoomViewerVideo } from '@/components/rooms/RoomViewerVideo'
+import { ViewerParticipationPanel } from '@/components/rooms/ViewerParticipationPanel'
 
 type RoomDetail = components['schemas']['RoomDetail']
 
@@ -47,7 +48,6 @@ function RoomVideoPane({ room, viewerCount }: { room: RoomDetail; viewerCount: n
 }
 
 function RoomInfoHeader({ room }: { room: RoomDetail }) {
-  const isLive = room.status === 'LIVE'
   return (
     <div className="flex items-start gap-3">
       <Avatar src={room.creator?.avatarUrl ?? undefined} name={room.creator?.displayName ?? '?'} size="md" />
@@ -57,37 +57,6 @@ function RoomInfoHeader({ room }: { room: RoomDetail }) {
           <span className="text-sm text-muted-foreground">{room.creator?.displayName ?? 'Creator'}</span>
           <StatusBadge status={room.status} />
         </div>
-      </div>
-      {isLive && (
-        <div className="flex gap-2 shrink-0">
-          <Button asChild size="sm" variant="outline">
-            <Link to={`/rooms/${room.id}/tips`}><Coins className="h-4 w-4 mr-1" />Tip</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link to={`/rooms/${room.id}/private-sessions/request`}><Lock className="h-4 w-4 mr-1" />Private</Link>
-          </Button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function RoomTipMenu({ items, roomId }: { items: { id: string; label: string; tokenAmount: number }[]; roomId: string }) {
-  if (items.length === 0) return null
-  return (
-    <div className="space-y-2">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Tip Menu</h2>
-      <div className="space-y-2">
-        {items.map((item) => (
-          <Button key={item.id} asChild variant="outline" className="w-full justify-between">
-            <Link to={`/rooms/${roomId}/tips`}>
-              <span className="text-sm">{item.label}</span>
-              <span className="flex items-center gap-1 text-xs text-primary">
-                <Coins className="h-3 w-3" />{item.tokenAmount}
-              </span>
-            </Link>
-          </Button>
-        ))}
       </div>
     </div>
   )
@@ -105,7 +74,17 @@ export function RoomPage() {
     () => (msgData?.data as ChatMessageDto[] | undefined) ?? [],
     [msgData?.data],
   )
-  const { messages, viewerCount, pinnedMessage, connected, sending, sendMessage } = useRoomSocket(
+  
+  const { 
+    messages, 
+    viewerCount, 
+    pinnedMessage, 
+    connected, 
+    sending, 
+    sendMessage,
+    privateRequestStatus,
+    setPrivateRequestStatus
+  } = useRoomSocket(
     room?.id,
     initialMessages,
   )
@@ -129,8 +108,8 @@ export function RoomPage() {
     <div className="space-y-4">
       <RoomVideoPane room={room} viewerCount={displayViewerCount} />
       <RoomInfoHeader room={room} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[500px]">
+        <div className="lg:col-span-2 min-h-0">
           <RoomChatPanel
             messages={messages}
             pinnedMessage={pinnedMessage}
@@ -140,7 +119,15 @@ export function RoomPage() {
             onSend={sendMessage}
           />
         </div>
-        <RoomTipMenu items={menuItems} roomId={room.id} />
+        <div className="min-h-0 overflow-y-auto">
+          <ViewerParticipationPanel 
+            room={room} 
+            viewerState={viewerState} 
+            menuItems={menuItems}
+            privateRequestStatus={privateRequestStatus}
+            setPrivateRequestStatus={setPrivateRequestStatus}
+          />
+        </div>
       </div>
     </div>
   )

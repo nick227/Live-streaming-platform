@@ -1,8 +1,6 @@
-// Generated from openapi.yaml — fill in seeds and assertions.
-// Run `pnpm test:generate` to add stubs for new routes.
-// Both test users are pre-seeded: use testOtherUserId for cross-user permission tests.
 import { describe, it, expect } from 'vitest'
-import { buildTestApp, asAuth, validateResponse, testUserId, testOtherUserId } from './helpers'
+import { buildTestApp, asAuth, validateResponse, testUserId, createTestCreator, createActiveCreator, createRoom, createMediaAsset } from './helpers'
+import { db } from '@streamyolo/db'
 
 const app = buildTestApp()
 
@@ -13,12 +11,13 @@ describe('prepareRoom', () => {
   })
 
   it('POST /creator/rooms/prepare', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    await createTestCreator(testUserId)
+    const media = await createMediaAsset(testUserId)
     const res = await app.inject({
       method: 'POST',
       url: '/creator/rooms/prepare',
       headers: asAuth(testUserId),
-      // payload: {},
+      payload: { title: 'New Stream', thumbnailMediaId: media.id },
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('prepareRoom', 200, res.json())
@@ -32,12 +31,18 @@ describe('goLive', () => {
   })
 
   it('POST /creator/rooms/{roomId}/go-live', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    const creator = await createActiveCreator(testUserId)
+    await db.creatorMenuItem.create({
+      data: { creatorId: creator.id, label: 'Shoutout', tokenAmount: 50, isActive: true }
+    })
+    const room = await db.room.create({
+      data: { creatorId: creator.id, title: 'Prepared Room', slug: 'prepared-room', livekitRoomName: 'room-123', thumbnailMediaId: 'media-123' },
+    })
+
     const res = await app.inject({
       method: 'POST',
-      url: '/creator/rooms/00000000-0000-0000-0000-000000000001/go-live',
+      url: `/creator/rooms/${room.id}/go-live`,
       headers: asAuth(testUserId),
-      // payload: {},
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('goLive', 200, res.json())
@@ -51,12 +56,12 @@ describe('endRoom', () => {
   })
 
   it('POST /creator/rooms/{roomId}/end', async () => {
-    // TODO: seed domain data (test users are pre-seeded by buildTestApp)
+    const creator = await createTestCreator(testUserId)
+    const room = await createRoom(creator.id)
     const res = await app.inject({
       method: 'POST',
-      url: '/creator/rooms/00000000-0000-0000-0000-000000000001/end',
+      url: `/creator/rooms/${room.id}/end`,
       headers: asAuth(testUserId),
-      // payload: {},
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('endRoom', 200, res.json())

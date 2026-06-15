@@ -1,0 +1,1 @@
+export { UploadMediaPage } from './UploadMediaPage'

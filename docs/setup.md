@@ -27,25 +27,25 @@ pnpm bootstrap
 
 ## Environment variables
 
-Copy `.env.example` to `apps/server/.env` and `apps/web/.env`:
+Copy `.env.example` to the repository root `.env`:
 
 ```bash
-cp .env.example apps/server/.env
-cp .env.example apps/web/.env
+cp .env.example .env
 ```
 
-Edit both files. Required values:
+Edit `.env`. Required values:
 
 | Variable | Where | Notes |
 |---|---|---|
-| `DATABASE_URL` | server | MySQL connection string (`mysql://user:pass@host:3306/db`) |
+| `DATABASE_URL` | server/db | MySQL connection string (`mysql://user:pass@host:3306/db`) |
 | `SESSION_SECRET` | server | Min 32 random chars |
-| `LIVEKIT_URL` | server + web | `wss://` URL from LiveKit dashboard |
+| `LIVEKIT_URL` | server | `wss://` URL from LiveKit dashboard |
 | `LIVEKIT_API_KEY` | server | From LiveKit dashboard |
 | `LIVEKIT_API_SECRET` | server | From LiveKit dashboard |
-| `CCBILL_*` | server | Five CCBill variables from merchant portal |
+| `CCBILL_*` | server | CCBill variables from merchant portal |
 | `STORAGE_LOCAL_PATH` | server | Dev only — directory for uploaded files |
 | `VITE_API_URL` | web | `http://localhost:3001` for local dev |
+| `VITE_LIVEKIT_URL` | web | Browser-facing LiveKit URL |
 
 ## Database
 

@@ -3,7 +3,7 @@ import { Pin } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { formatMessageTime } from './formatMessageTime'
 import { EVENT_FILTERS, getEventFilter, type EventFilter } from './eventFilter'
-import type { ChatMessageDto } from './types'
+import type { ChatMessageDto, RoomEvent } from './types'
 
 type UserAction = 'mute' | 'unmute' | 'kick' | 'ban' | 'shoutout' | 'vip' | 'unvip'
 
@@ -78,7 +78,7 @@ export function CreatorEventLog({
   onDeleteMessage,
   onPinMessage,
 }: {
-  messages: ChatMessageDto[]
+  messages: RoomEvent[]
   pinnedMessage?: ChatMessageDto | null
   eventFilter: EventFilter
   onEventFilterChange: (filter: EventFilter) => void
@@ -88,12 +88,12 @@ export function CreatorEventLog({
 }) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const visibleMessages = messages.filter(
-    (message) => eventFilter === 'ALL' || getEventFilter(message) === eventFilter,
+    (event) => eventFilter === 'ALL' || getEventFilter(event) === eventFilter,
   )
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [visibleMessages.length, visibleMessages[visibleMessages.length - 1]?.id])
+  }, [visibleMessages.length, visibleMessages[visibleMessages.length - 1]?.message.id])
 
   return (
     <div className="flex-1 bg-card rounded-lg border border-border flex flex-col overflow-hidden min-h-0">
@@ -131,28 +131,33 @@ export function CreatorEventLog({
         {visibleMessages.length === 0 && (
           <div className="text-sm text-muted-foreground italic">No events yet...</div>
         )}
-        {visibleMessages.map((message) => (
+        {visibleMessages.map((event) => (
           <div
-            key={message.id}
-            className={`rounded border border-border/70 p-2 text-sm ${message.deletedAt ? 'opacity-50' : ''}`}
+            key={event.message.id}
+            className={`rounded border border-border/70 p-2 text-sm ${event.message.deletedAt ? 'opacity-50' : ''}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-bold text-primary">{userLabel(message.user)}</span>
+                  <span className="font-bold text-primary">{userLabel(event.message.user)}</span>
                   <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                    {getEventFilter(message).toLowerCase()}
+                    {getEventFilter(event).toLowerCase()}
                   </span>
-                  <span className="text-xs text-muted-foreground">{formatMessageTime(message.createdAt)}</span>
+                  <span className="text-xs text-muted-foreground">{formatMessageTime(event.message.createdAt)}</span>
                 </div>
                 <div className="mt-1 break-words">
-                  {message.deletedAt ? 'Message removed' : message.body}
+                  {event.message.deletedAt ? 'Message removed' : event.message.body}
+                  {event.type === 'tip' && !event.message.deletedAt && (
+                    <span className="ml-2 font-bold text-amber-500">
+                      ({event.amountTokens} tokens)
+                    </span>
+                  )}
                 </div>
               </div>
-              {!message.deletedAt && (
+              {!event.message.deletedAt && (
                 <ModerationButtons
-                  userId={message.user?.id ?? undefined}
-                  messageId={message.id}
+                  userId={event.message.user?.id ?? undefined}
+                  messageId={event.message.id}
                   onUserAction={onUserAction}
                   onDeleteMessage={onDeleteMessage}
                   onPinMessage={onPinMessage}
