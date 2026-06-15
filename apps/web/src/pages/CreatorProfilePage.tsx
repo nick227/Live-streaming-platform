@@ -1,96 +1,197 @@
-import { Link } from 'react-router-dom'
-import { useCreatorProfile } from '@streamyolo/sdk'
+import { useRef } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  useCurrentUser,
+  useCreatorProfile,
+  useUpdateCreatorProfile,
+  useUploadMedia,
+  useLogout,
+} from '@streamyolo/sdk'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusBadge } from '@/components/admin/StatusBadge'
-import { Card, CardContent } from '@/components/ui/Card'
-import { Pencil, Radio, Coins } from 'lucide-react'
+import { ProfileWalletCard } from '@/components/profile/ProfileWalletCard'
+import { ProfileSettingsForm } from '@/components/profile/ProfileSettingsForm'
+import type { ProfileFormData } from '@/components/profile/ProfileSettingsForm'
+import { ProfileStreamHistory } from '@/components/profile/ProfileStreamHistory'
+import { resolveMediaUrl } from '@/lib/mediaUrl'
+import { toggleTheme } from '@/lib/theme'
+import { toast } from 'sonner'
+import {
+  Camera,
+  LogOut,
+  Moon,
+  Radio,
+  Shield,
+  ShieldCheck,
+  Sun,
+  Coins,
+  List,
+} from 'lucide-react'
 
 export function CreatorProfilePage() {
-  const { data, isLoading } = useCreatorProfile()
+  const navigate = useNavigate()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const { data: meData, isLoading: meLoading } = useCurrentUser()
+  const { data: profileData, isLoading: profileLoading } = useCreatorProfile()
+  const updateProfile = useUpdateCreatorProfile()
+  const uploadMedia = useUploadMedia()
+  const logout = useLogout()
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-32 w-full rounded-xl" />
-      <Skeleton className="h-6 w-48" />
-      <Skeleton className="h-4 w-96" />
-    </div>
-  )
+  const isLoading = meLoading || profileLoading
 
-  const profile = (data as any) ?? null
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-24 w-24 rounded-full" />
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
+    )
+  }
 
-  if (!profile) return (
-    <div className="text-center space-y-4 py-12">
-      <p className="text-muted-foreground">No creator profile yet.</p>
-      <Button asChild>
-        <Link to="/creator/profile/edit">Set Up Profile</Link>
-      </Button>
-    </div>
-  )
+  const user = meData?.data?.user
+  const profile = profileData?.data
+  const screenName = profile?.stageName ?? user?.displayName ?? user?.username ?? 'User'
+  const avatarSrc = resolveMediaUrl(profile?.avatarUrl)
+
+  const formDefaults: ProfileFormData = {
+    stageName: profile?.stageName ?? user?.displayName ?? user?.username ?? '',
+    bio: profile?.bio ?? '',
+    privateRateTokensPerMinute: String(profile?.privateRateTokensPerMinute || 6),
+    minPrivateMinutes: String(profile?.minPrivateMinutes || 1),
+    privateViewerCamRequired: profile?.privateViewerCamRequired ? 'true' : 'false',
+    privateScreenShareAllowed: profile?.privateScreenShareAllowed ? 'true' : 'false',
+    privateRulesText: profile?.privateRulesText ?? '',
+  }
+
+  async function handleAvatarChange(file: File) {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('type', 'AVATAR')
+    try {
+      const result = await uploadMedia.mutateAsync(fd) as { data?: { id?: string } }
+      const mediaId = result.data?.id
+      if (!mediaId) throw new Error('No media id')
+      await updateProfile.mutateAsync({ avatarMediaId: mediaId })
+      toast.success('Avatar updated')
+    } catch {
+      toast.error('Avatar upload failed')
+    }
+  }
+
+  async function handleLogout() {
+    await logout.mutateAsync(undefined)
+    navigate('/login', { replace: true })
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Banner */}
-      {profile.bannerUrl && (
-        <div className="h-32 rounded-xl overflow-hidden bg-muted">
-          <img src={profile.bannerUrl} alt="Banner" className="w-full h-full object-cover" />
-        </div>
-      )}
-
+    <div className="space-y-8 pb-8">
       {/* Header */}
       <div className="flex items-start gap-4">
-        <Avatar src={profile.avatarUrl} name={profile.stageName ?? '?'} size="lg" />
-        <div className="flex-1 min-w-0 space-y-1">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="relative group shrink-0"
+          disabled={uploadMedia.isPending || updateProfile.isPending}
+        >
+          <Avatar src={avatarSrc} name={screenName} size="xl" />
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Camera className="h-5 w-5 text-white" />
+          </span>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) void handleAvatarChange(file)
+            e.target.value = ''
+          }}
+        />
+        <div className="flex-1 min-w-0 pt-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-semibold">{profile.stageName}</h1>
-            <StatusBadge status={profile.status} />
-            {profile.isLive && <StatusBadge status="LIVE" />}
+            <h1 className="text-3xl font-bold tracking-tight">{screenName}</h1>
+            {profile?.status && <StatusBadge status={profile.status} />}
+            {profile?.isLive && <StatusBadge status="LIVE" />}
           </div>
-          {profile.bio && <p className="text-sm text-muted-foreground">{profile.bio}</p>}
+          {user?.username && (
+            <p className="text-muted-foreground mt-1">@{user.username}</p>
+          )}
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/creator/profile/edit">
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit
-          </Link>
-        </Button>
       </div>
 
-      {/* Private session rates */}
-      {profile.privateRateTokensPerMinute > 0 && (
-        <Card>
-          <CardContent className="py-4 grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Rate</p>
-              <p className="font-semibold flex items-center gap-1">
-                <Coins className="h-4 w-4 text-primary" />
-                {profile.privateRateTokensPerMinute} tokens/min
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Min Duration</p>
-              <p className="font-semibold">{profile.minPrivateMinutes ?? 1} min</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Wallet */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Wallet</h2>
+        <ProfileWalletCard />
+      </section>
+
+      {/* Creator settings */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Creator Settings</h2>
+        <ProfileSettingsForm defaults={formDefaults} />
+      </section>
+
+      {/* Stream history */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Stream History</h2>
+        <ProfileStreamHistory />
+      </section>
 
       {/* Actions */}
-      <div className="flex gap-3 flex-wrap">
-        <Button asChild>
-          <Link to="/creator/rooms/prepare">
-            <Radio className="h-4 w-4 mr-2" />
-            New Room
-          </Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link to="/creator/menu-items">Tip Menu</Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link to="/creator/earnings">Earnings</Link>
-        </Button>
-      </div>
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Account</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/creator/rooms/prepare">
+              <Radio className="h-4 w-4 mr-1.5" />
+              New Room
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/creator/menu-items">
+              <List className="h-4 w-4 mr-1.5" />
+              Tip Menu
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/creator/earnings">
+              <Coins className="h-4 w-4 mr-1.5" />
+              Earnings
+            </Link>
+          </Button>
+          {profile?.currentRoomId && (
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/creator/rooms/${profile.currentRoomId}/moderation`}>
+                <Shield className="h-4 w-4 mr-1.5" />
+                Streamer Controls
+              </Link>
+            </Button>
+          )}
+          {user?.role === 'ADMIN' && (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/overview">
+                <ShieldCheck className="h-4 w-4 mr-1.5" />
+                Admin
+              </Link>
+            </Button>
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={toggleTheme}>
+            <Sun className="h-4 w-4 mr-1.5 dark:hidden" />
+            <Moon className="h-4 w-4 mr-1.5 hidden dark:block" />
+            Toggle Theme
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleLogout} loading={logout.isPending}>
+            <LogOut className="h-4 w-4 mr-1.5" />
+            Log Out
+          </Button>
+        </div>
+      </section>
     </div>
   )
 }

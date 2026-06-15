@@ -3,6 +3,43 @@ import { nanoid } from 'nanoid'
 import { encodeCursor, decodeCursor, normalizeLimit } from '../lib/pagination'
 
 export class RoomService {
+  async listByCreatorUserId(
+    creatorUserId: string,
+    params: { cursor?: string; limit?: number },
+  ) {
+    const creator = await db.creatorProfile.findUnique({ where: { userId: creatorUserId } })
+    if (!creator) return { rooms: [], meta: { hasMore: false, nextCursor: null } }
+
+    const limit = normalizeLimit(params.limit)
+    const cursorPayload = decodeCursor(params.cursor)
+
+    const rooms = await db.room.findMany({
+      where: {
+        creatorId: creator.id,
+        ...(cursorPayload
+          ? {
+              OR: [
+                { createdAt: { lt: new Date(cursorPayload.createdAt) } },
+                { createdAt: new Date(cursorPayload.createdAt), id: { lt: cursorPayload.id } },
+              ],
+            }
+          : {}),
+      },
+      include: { creator: CREATOR_INCLUDE, goal: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    })
+
+    const hasMore = rooms.length > limit
+    if (hasMore) rooms.pop()
+
+    const nextCursor = hasMore
+      ? encodeCursor({ createdAt: rooms[rooms.length - 1].createdAt.toISOString(), id: rooms[rooms.length - 1].id })
+      : null
+
+    return { rooms: rooms.map(formatRoom), meta: { hasMore, nextCursor } }
+  }
+
   async list(params: { cursor?: string; limit?: number; q?: string; status?: string }) {
     const limit = normalizeLimit(params.limit)
     const cursorPayload = decodeCursor(params.cursor)
@@ -11,7 +48,7 @@ export class RoomService {
       where: {
         status: (params.status as any) ?? 'LIVE',
         visibility: 'PUBLIC',
-        ...(params.q ? { title: { contains: params.q, mode: 'insensitive' } } : {}),
+        ...(params.q ? { title: { contains: params.q } } : {}),
         ...(cursorPayload
           ? {
               OR: [
@@ -22,7 +59,7 @@ export class RoomService {
           : {}),
       },
       include: {
-        creator: { select: { id: true, stageName: true, userId: true } },
+        creator: CREATOR_INCLUDE,
         goal: true,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -43,7 +80,7 @@ export class RoomService {
     const room = await db.room.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
       include: {
-        creator: { select: { id: true, stageName: true, userId: true } },
+        creator: CREATOR_INCLUDE,
         goal: true,
         menuItems: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } },
       },
@@ -52,9 +89,23 @@ export class RoomService {
     return room
   }
 
-  async prepare(creatorUserId: string, data: { title: string; slug?: string; visibility?: string }) {
-    const creator = await db.creatorProfile.findUnique({ where: { userId: creatorUserId } })
-    if (!creator) throw { statusCode: 403, message: 'Creator profile required' }
+  async prepare(
+    creatorUserId: string,
+    data: { title: string; slug?: string; visibility?: string; thumbnailMediaId?: string; coverMediaId?: string },
+  ) {
+    let creator = await db.creatorProfile.findUnique({ where: { userId: creatorUserId } })
+    if (!creator) {
+      const user = await db.user.findUnique({ where: { id: creatorUserId } })
+      if (!user) throw { statusCode: 404, message: 'User not found' }
+      creator = await db.creatorProfile.create({
+        data: {
+          userId: creatorUserId,
+          stageName: user.displayName ?? user.username,
+          status: 'PENDING',
+        }
+      })
+      await db.user.update({ where: { id: creatorUserId }, data: { role: 'CREATOR' } })
+    }
 
     const slug = data.slug ?? `${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${nanoid(6)}`
     const livekitRoomName = `room-${nanoid(16)}`
@@ -66,9 +117,11 @@ export class RoomService {
         slug,
         livekitRoomName,
         visibility: (data.visibility as any) ?? 'PUBLIC',
+        thumbnailMediaId: data.thumbnailMediaId,
+        coverMediaId: data.coverMediaId,
       },
       include: {
-        creator: { select: { id: true, stageName: true, userId: true } },
+        creator: CREATOR_INCLUDE,
         goal: true,
       },
     })
@@ -83,7 +136,7 @@ export class RoomService {
     const updated = await db.room.update({
       where: { id: roomId },
       data: { status: 'LIVE', startedAt: new Date() },
-      include: { creator: { select: { id: true, stageName: true, userId: true } }, goal: true },
+      include: { creator: CREATOR_INCLUDE, goal: true },
     })
 
     await db.creatorProfile.update({
@@ -100,7 +153,7 @@ export class RoomService {
     const updated = await db.room.update({
       where: { id: roomId },
       data: { status: 'ENDED', endedAt: new Date() },
-      include: { creator: { select: { id: true, stageName: true, userId: true } }, goal: true },
+      include: { creator: CREATOR_INCLUDE, goal: true },
     })
 
     await db.creatorProfile.update({
@@ -148,22 +201,45 @@ export class RoomService {
   }
 }
 
+export const CREATOR_INCLUDE = {
+  select: {
+    id: true,
+    stageName: true,
+    userId: true,
+    isLive: true,
+    status: true,
+    privateRateTokensPerMinute: true,
+    minPrivateMinutes: true,
+    privateViewerCamRequired: true,
+    privateScreenShareAllowed: true,
+  },
+}
+
 export function formatRoom(room: any) {
   return {
     id: room.id,
-    creatorId: room.creatorId,
-    title: room.title,
     slug: room.slug,
+    title: room.title,
     status: room.status,
     visibility: room.visibility,
-    thumbnailMediaId: room.thumbnailMediaId ?? null,
-    coverMediaId: room.coverMediaId ?? null,
+    thumbnailUrl: room.thumbnailMediaId ? `/media/${room.thumbnailMediaId}` : null, // just mock or omit since string is ok
     viewerCount: room.viewerCount,
+    privateAvailable: room.creator?.privateRateTokensPerMinute > 0,
+    privateRateTokensPerMinute: room.creator?.privateRateTokensPerMinute ?? null,
+    minPrivateMinutes: room.creator?.minPrivateMinutes ?? 1,
+    privateViewerCamRequired: room.creator?.privateViewerCamRequired ?? false,
+    privateScreenShareAllowed: room.creator?.privateScreenShareAllowed ?? false,
     startedAt: room.startedAt?.toISOString() ?? null,
-    endedAt: room.endedAt?.toISOString() ?? null,
     createdAt: room.createdAt.toISOString(),
     creator: room.creator
-      ? { id: room.creator.id, stageName: room.creator.stageName, userId: room.creator.userId }
+      ? {
+          id: room.creator.id,
+          userId: room.creator.userId,
+          stageName: room.creator.stageName,
+          isLive: room.creator.isLive,
+          status: room.creator.status,
+          username: '', // Username isn't actually required by CreatorSummary schema, but we can omit it by not including it in select and just dropping it if typescript complains. Actually, let's omit username.
+        }
       : undefined,
     goal: room.goal
       ? {
@@ -172,6 +248,6 @@ export function formatRoom(room: any) {
           targetTokens: room.goal.targetTokens,
           currentTokens: room.goal.currentTokens,
         }
-      : null,
+      : undefined,
   }
 }

@@ -1,29 +1,27 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getApiClient, ApiError } from '../client'
+import { getApiClient, unwrap } from '../client'
 
 export function useRooms(params?: { cursor?: string; limit?: number; q?: string }) {
   return useQuery({
     queryKey: ['rooms', params],
-    queryFn: async () => {
-      const { data, error } = await getApiClient().GET('/rooms', {
-        params: { query: params as any },
-      })
-      if (error) throw new ApiError(500, 'Failed to fetch rooms')
-      return data
-    },
+    queryFn: async () =>
+      unwrap(await getApiClient().GET('/rooms', { params: { query: params as any } })),
+  })
+}
+
+export function useCreatorRooms(params?: { cursor?: string; limit?: number }) {
+  return useQuery({
+    queryKey: ['creator-rooms', params],
+    queryFn: async () =>
+      unwrap(await getApiClient().GET('/creator/rooms', { params: { query: params as any } })),
   })
 }
 
 export function useRoom(slug: string) {
   return useQuery({
     queryKey: ['room', slug],
-    queryFn: async () => {
-      const { data, error } = await getApiClient().GET('/rooms/{slug}', {
-        params: { path: { slug } },
-      })
-      if (error) throw new ApiError(404, 'Room not found')
-      return data
-    },
+    queryFn: async () =>
+      unwrap(await getApiClient().GET('/rooms/{slug}', { params: { path: { slug } } })),
     enabled: Boolean(slug),
   })
 }
@@ -31,11 +29,8 @@ export function useRoom(slug: string) {
 export function usePrepareRoom() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (body: any) => {
-      const { data, error } = await getApiClient().POST('/creator/rooms/prepare', { body })
-      if (error) throw new ApiError(500, 'Failed to prepare room')
-      return data
-    },
+    mutationFn: async (body: any) =>
+      unwrap(await getApiClient().POST('/creator/rooms/prepare', { body })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
   })
 }
@@ -43,14 +38,13 @@ export function usePrepareRoom() {
 export function useGoLive() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (roomId: string) => {
-      const { data, error } = await getApiClient().POST('/creator/rooms/{roomId}/go-live', {
-        params: { path: { roomId } },
-        body: undefined as any,
-      })
-      if (error) throw new ApiError(500, 'Failed to go live')
-      return data
-    },
+    mutationFn: async (roomId: string) =>
+      unwrap(
+        await getApiClient().POST('/creator/rooms/{roomId}/go-live', {
+          params: { path: { roomId } },
+          body: undefined as any,
+        }),
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
   })
 }
@@ -58,14 +52,13 @@ export function useGoLive() {
 export function useEndRoom() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (roomId: string) => {
-      const { data, error } = await getApiClient().POST('/creator/rooms/{roomId}/end', {
-        params: { path: { roomId } },
-        body: undefined as any,
-      })
-      if (error) throw new ApiError(500, 'Failed to end room')
-      return data
-    },
+    mutationFn: async (roomId: string) =>
+      unwrap(
+        await getApiClient().POST('/creator/rooms/{roomId}/end', {
+          params: { path: { roomId } },
+          body: undefined as any,
+        }),
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
   })
 }
@@ -73,13 +66,10 @@ export function useEndRoom() {
 export function useRoomMessages(roomId: string) {
   return useQuery({
     queryKey: ['room-messages', roomId],
-    queryFn: async () => {
-      const { data, error } = await getApiClient().GET('/rooms/{roomId}/messages', {
-        params: { path: { roomId } },
-      })
-      if (error) throw new ApiError(500, 'Failed to fetch messages')
-      return data
-    },
+    queryFn: async () =>
+      unwrap(
+        await getApiClient().GET('/rooms/{roomId}/messages', { params: { path: { roomId } } }),
+      ),
     enabled: Boolean(roomId),
   })
 }
@@ -87,13 +77,8 @@ export function useRoomMessages(roomId: string) {
 export function useRoomMenu(roomId: string) {
   return useQuery({
     queryKey: ['room-menu', roomId],
-    queryFn: async () => {
-      const { data, error } = await getApiClient().GET('/rooms/{roomId}/menu', {
-        params: { path: { roomId } },
-      })
-      if (error) throw new ApiError(500, 'Failed to fetch room menu')
-      return data
-    },
+    queryFn: async () =>
+      unwrap(await getApiClient().GET('/rooms/{roomId}/menu', { params: { path: { roomId } } })),
     enabled: Boolean(roomId),
   })
 }

@@ -265,6 +265,9 @@ components:
       properties:
         stageName: { type: string, minLength: 1, maxLength: 50 }
         bio: { type: string, maxLength: 1000 }
+        avatarMediaId: { type: string }
+        bannerMediaId: { type: string }
+        logoMediaId: { type: string }
         privateRateTokensPerMinute: { type: integer, minimum: 0 }
         minPrivateMinutes: { type: integer, minimum: 1 }
         privateViewerCamRequired: { type: boolean }
@@ -477,6 +480,114 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    # ── Streamer moderation ──────────────────────────────────────────────────
+
+    ModerationActionDto:
+      type: object
+      required: [id, roomId, creatorId, actorUserId, type, createdAt]
+      properties:
+        id: { type: string }
+        roomId: { type: string }
+        creatorId: { type: string }
+        actorUserId: { type: string }
+        targetUserId:
+          type: string
+          nullable: true
+        targetMessageId:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [MUTE, UNMUTE, KICK, BAN, UNBAN, DELETE_MESSAGE, PIN_MESSAGE, CLEAR_CHAT, SLOW_MODE, REWARD]
+        reason:
+          type: string
+          nullable: true
+        durationSeconds:
+          type: integer
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+
+    RoomChatSettingsDto:
+      type: object
+      required: [roomId, slowModeSeconds]
+      properties:
+        roomId: { type: string }
+        slowModeSeconds: { type: integer, minimum: 0 }
+        pinnedMessage:
+          type: object
+          allOf:
+            - { $ref: '#/components/schemas/ChatMessageDto' }
+          nullable: true
+
+    CreatorUserBanDto:
+      type: object
+      required: [id, creatorId, userId, createdById, createdAt]
+      properties:
+        id: { type: string }
+        creatorId: { type: string }
+        userId: { type: string }
+        createdById: { type: string }
+        reason:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    CreatorUserRewardDto:
+      type: object
+      required: [id, creatorId, userId, createdById, type, createdAt]
+      properties:
+        id: { type: string }
+        creatorId: { type: string }
+        userId: { type: string }
+        createdById: { type: string }
+        type:
+          type: string
+          enum: [SHOUTOUT, VIP, UNVIP]
+        note:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    ModerateUserInput:
+      type: object
+      required: [targetUserId]
+      properties:
+        targetUserId: { type: string }
+        reason: { type: string, maxLength: 500 }
+        durationSeconds: { type: integer, minimum: 1 }
+
+    RewardUserInput:
+      type: object
+      required: [targetUserId, type]
+      properties:
+        targetUserId: { type: string }
+        type:
+          type: string
+          enum: [SHOUTOUT, VIP, UNVIP]
+        note: { type: string, maxLength: 500 }
+        durationSeconds: { type: integer, minimum: 1 }
+
+    UpdateRoomChatSettingsInput:
+      type: object
+      properties:
+        slowModeSeconds: { type: integer, minimum: 0, maximum: 300 }
 
     # ── Tips ──────────────────────────────────────────────────────────────────
 
@@ -916,6 +1027,30 @@ paths:
 
   # ── Creator rooms ────────────────────────────────────────────────────────────
 
+  /creator/rooms:
+    get:
+      operationId: listCreatorRooms
+      summary: List rooms created by the current creator
+      tags: [creator-rooms]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated room list for the authenticated creator
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/RoomCard' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /creator/rooms/prepare:
     post:
       operationId: prepareRoom
@@ -1020,6 +1155,35 @@ paths:
           $ref: '#/components/responses/NotFound'
 
   # ── Creator profile ──────────────────────────────────────────────────────────
+
+  /creator/rooms/{roomId}/private-sessions:
+    get:
+      operationId: getCreatorPrivateSessions
+      summary: Get private sessions for the creator's room
+      tags: [private-sessions]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of private sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PrivateSessionDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /creator/profile:
     get:
@@ -1224,6 +1388,339 @@ paths:
                     items: { $ref: '#/components/schemas/ChatMessageDto' }
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /creator/rooms/{roomId}/moderation/actions:
+    get:
+      operationId: listRoomModerationActions
+      summary: List recent streamer moderation actions for a room
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Moderation actions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ModerationActionDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /creator/rooms/{roomId}/moderation/mute:
+    post:
+      operationId: muteRoomUser
+      summary: Temporarily mute a viewer in the creator's room chat
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModerateUserInput' }
+      responses:
+        '200':
+          description: Viewer muted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [action]
+                    properties:
+                      action: { $ref: '#/components/schemas/ModerationActionDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /creator/rooms/{roomId}/moderation/unmute:
+    post:
+      operationId: unmuteRoomUser
+      summary: Unmute a viewer in the creator's room chat
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModerateUserInput' }
+      responses:
+        '200':
+          description: Viewer unmuted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [action]
+                    properties:
+                      action: { $ref: '#/components/schemas/ModerationActionDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /creator/rooms/{roomId}/moderation/kick:
+    post:
+      operationId: kickRoomUser
+      summary: Remove a viewer from the current room
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModerateUserInput' }
+      responses:
+        '200':
+          description: Viewer kicked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [action]
+                    properties:
+                      action: { $ref: '#/components/schemas/ModerationActionDto' }
+
+  /creator/rooms/{roomId}/moderation/ban:
+    post:
+      operationId: banCreatorUser
+      summary: Ban a viewer from this creator's rooms
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModerateUserInput' }
+      responses:
+        '200':
+          description: Viewer banned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [ban, action]
+                    properties:
+                      ban: { $ref: '#/components/schemas/CreatorUserBanDto' }
+                      action: { $ref: '#/components/schemas/ModerationActionDto' }
+
+  /creator/rooms/{roomId}/moderation/unban:
+    post:
+      operationId: unbanCreatorUser
+      summary: Remove a creator-level viewer ban
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModerateUserInput' }
+      responses:
+        '200':
+          description: Viewer unbanned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [action]
+                    properties:
+                      action: { $ref: '#/components/schemas/ModerationActionDto' }
+
+  /creator/rooms/{roomId}/moderation/reward:
+    post:
+      operationId: rewardRoomUser
+      summary: Reward a viewer with a shoutout or creator VIP marker
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RewardUserInput' }
+      responses:
+        '200':
+          description: Viewer rewarded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [reward, action]
+                    properties:
+                      reward: { $ref: '#/components/schemas/CreatorUserRewardDto' }
+                      action: { $ref: '#/components/schemas/ModerationActionDto' }
+
+  /creator/rooms/{roomId}/messages/{messageId}:
+    delete:
+      operationId: deleteRoomMessage
+      summary: Soft-delete a room chat message
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: messageId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Message deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [message, action]
+                    properties:
+                      message: { $ref: '#/components/schemas/ChatMessageDto' }
+                      action: { $ref: '#/components/schemas/ModerationActionDto' }
+
+  /creator/rooms/{roomId}/messages/{messageId}/pin:
+    post:
+      operationId: pinRoomMessage
+      summary: Pin a room chat message
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: messageId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Message pinned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [settings, action]
+                    properties:
+                      settings: { $ref: '#/components/schemas/RoomChatSettingsDto' }
+                      action: { $ref: '#/components/schemas/ModerationActionDto' }
+
+  /creator/rooms/{roomId}/chat-settings:
+    patch:
+      operationId: updateRoomChatSettings
+      summary: Update room chat settings such as slow mode
+      tags: [streamer-moderation]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateRoomChatSettingsInput' }
+      responses:
+        '200':
+          description: Chat settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [settings, action]
+                    properties:
+                      settings: { $ref: '#/components/schemas/RoomChatSettingsDto' }
+                      action: { $ref: '#/components/schemas/ModerationActionDto' }
+
+  /creator/bans:
+    get:
+      operationId: listCreatorBans
+      summary: List creator-level viewer bans
+      tags: [streamer-moderation]
+      responses:
+        '200':
+          description: Creator bans
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CreatorUserBanDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   # ── Tips ─────────────────────────────────────────────────────────────────────
 

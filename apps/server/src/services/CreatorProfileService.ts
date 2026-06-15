@@ -70,6 +70,10 @@ export class CreatorProfileService {
   }
 }
 
+function mediaUrl(mediaId: string | null | undefined) {
+  return mediaId ? `/media/${mediaId}` : null
+}
+
 export function formatCreatorProfile(profile: any) {
   return {
     id: profile.id,
@@ -77,8 +81,11 @@ export function formatCreatorProfile(profile: any) {
     stageName: profile.stageName,
     bio: profile.bio ?? null,
     avatarMediaId: profile.avatarMediaId ?? null,
+    avatarUrl: mediaUrl(profile.avatarMediaId),
     logoMediaId: profile.logoMediaId ?? null,
+    logoUrl: mediaUrl(profile.logoMediaId),
     bannerMediaId: profile.bannerMediaId ?? null,
+    bannerUrl: mediaUrl(profile.bannerMediaId),
     status: profile.status,
     isLive: profile.isLive,
     currentRoomId: profile.currentRoomId ?? null,
