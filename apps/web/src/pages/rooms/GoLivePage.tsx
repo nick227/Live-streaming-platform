@@ -24,17 +24,32 @@ import {
 } from '@streamyolo/sdk'
 import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant } from '@livekit/components-react'
 import { Track } from 'livekit-client'
-import { Camera, Coins, Image, Lock } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Camera,
+  Clock,
+  Coins,
+  Lock,
+  Maximize2,
+  Mic,
+  MicOff,
+  Minimize2,
+  Target,
+  TrendingUp,
+  Users,
+  Video,
+  VideoOff,
+} from 'lucide-react'
 import { useRoomSocket } from '@/components/chat/useRoomSocket'
 import { captureVideoFrameAsFormData } from '@/lib/captureVideoFrame'
 import type { ChatMessageDto, RoomEvent } from '@/components/chat/types'
 import { CreatorEventLog, ModerationButtons } from '@/components/chat/CreatorEventLog'
 import type { EventFilter } from '@/components/chat/eventFilter'
 
-const goLiveButtonClass = 'bg-black hover:bg-black/90 text-white'
-const liveRecordingButtonClass = 'bg-red-600 hover:bg-red-700 text-white'
+// ─── types ────────────────────────────────────────────────────────────────────
 
 type BroadcastState =
   | 'PREVIEW_LOCAL'
@@ -45,109 +60,7 @@ type BroadcastState =
   | 'ENDING'
   | 'ENDED'
 
-function LocalPreview() {
-  const videoRef = useRef<HTMLVideoElement>(null)
-
-  useEffect(() => {
-    let stream: MediaStream | null = null
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((s) => {
-      stream = s
-      if (videoRef.current) videoRef.current.srcObject = stream
-    }).catch((err) => {
-      console.error('Failed to get camera', err)
-      toast.error('Could not access camera/mic')
-    })
-    return () => {
-      if (stream) stream.getTracks().forEach((t) => t.stop())
-    }
-  }, [])
-
-  return (
-    <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-border flex items-center justify-center">
-      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
-      <div className="absolute top-4 left-4 bg-black/60 text-white px-2 py-1 rounded text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
-        PREVIEW
-      </div>
-    </div>
-  )
-}
-
-function StreamerControls({ onToggleMute, onToggleVideo, isMuted, isVideoOff }: any) {
-  return (
-    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 bg-black/60 px-4 py-2 rounded-full backdrop-blur-md">
-      <Button variant={isMuted ? 'destructive' : 'outline'} size="sm" onClick={onToggleMute}>
-        {isMuted ? 'Unmute' : 'Mute'}
-      </Button>
-      <Button variant={isVideoOff ? 'destructive' : 'outline'} size="sm" onClick={onToggleVideo}>
-        {isVideoOff ? 'Turn Video On' : 'Turn Video Off'}
-      </Button>
-    </div>
-  )
-}
-
-function PublishedTracks({ isPrivate }: { isPrivate: boolean }) {
-  const { localParticipant } = useLocalParticipant()
-  const tracks = useTracks([Track.Source.Camera])
-
-  const [isMuted, setIsMuted] = useState(false)
-  const [isVideoOff, setIsVideoOff] = useState(false)
-
-  const handleToggleMute = () => {
-    if (localParticipant) {
-      if (isMuted) localParticipant.setMicrophoneEnabled(true)
-      else localParticipant.setMicrophoneEnabled(false)
-      setIsMuted(!isMuted)
-    }
-  }
-
-  const handleToggleVideo = () => {
-    if (localParticipant) {
-      if (isVideoOff) localParticipant.setCameraEnabled(true)
-      else localParticipant.setCameraEnabled(false)
-      setIsVideoOff(!isVideoOff)
-    }
-  }
-
-  return (
-    <>
-      {tracks.map((trackRef) => (
-        trackRef.publication.kind === 'video' ? (
-          <VideoTrack key={trackRef.publication.trackSid} trackRef={trackRef} className="w-full h-full object-cover transform scale-x-[-1]" />
-        ) : null
-      ))}
-      <div className="absolute top-4 left-4 flex gap-2">
-        <div className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider backdrop-blur-sm ${isPrivate ? 'bg-purple-600 text-white' : 'bg-red-600 text-white'}`}>
-          {isPrivate ? 'PRIVATE LIVE' : 'LIVE'}
-        </div>
-      </div>
-      <StreamerControls onToggleMute={handleToggleMute} onToggleVideo={handleToggleVideo} isMuted={isMuted} isVideoOff={isVideoOff} />
-    </>
-  )
-}
-
-function LiveBroadcast({ roomName, token, serverUrl, isPrivate, onDisconnect }: any) {
-  return (
-    <LiveKitRoom
-      video={true}
-      audio={true}
-      token={token}
-      serverUrl={serverUrl}
-      onDisconnected={onDisconnect}
-      className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-border"
-    >
-      <PublishedTracks isPrivate={isPrivate} />
-    </LiveKitRoom>
-  )
-}
-
-function tipAmountFromEvent(event: RoomEvent) {
-  if (event.type !== 'tip') return 0
-  return event.amountTokens
-}
-
-function userLabel(user: ChatMessageDto['user']) {
-  return user?.displayName ?? user?.id ?? 'Viewer'
-}
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function formatElapsed(seconds: number) {
   const mins = Math.floor(seconds / 60)
@@ -155,14 +68,428 @@ function formatElapsed(seconds: number) {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function userLabel(user: ChatMessageDto['user']) {
+  return user?.displayName ?? user?.id ?? 'Viewer'
+}
+
+function tipAmountFromEvent(event: RoomEvent) {
+  if (event.type !== 'tip') return 0
+  return event.amountTokens
+}
+
+// ─── LocalPreview ─────────────────────────────────────────────────────────────
+
+function LocalPreview({ isFullscreen }: { isFullscreen: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    let stream: MediaStream | null = null
+    navigator.mediaDevices
+      .getUserMedia({ video: true, audio: true })
+      .then((s) => {
+        stream = s
+        if (videoRef.current) videoRef.current.srcObject = stream
+      })
+      .catch((err) => {
+        console.error('Failed to get camera', err)
+        toast.error('Could not access camera/mic')
+      })
+    return () => {
+      if (stream) stream.getTracks().forEach((t) => t.stop())
+    }
+  }, [])
+
   return (
-    <div className="rounded border border-border bg-muted/30 px-3 py-2">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-semibold">{value}</div>
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted
+      className={cn(
+        'block transform scale-x-[-1] bg-black',
+        isFullscreen ? 'w-full h-full object-contain' : 'w-full',
+      )}
+    />
+  )
+}
+
+// ─── PublishedTracks ──────────────────────────────────────────────────────────
+
+function PublishedTracks({
+  isPrivate,
+  isMuted,
+  isVideoOff,
+  isFullscreen,
+}: {
+  isPrivate: boolean
+  isMuted: boolean
+  isVideoOff: boolean
+  isFullscreen: boolean
+}) {
+  const { localParticipant } = useLocalParticipant()
+  const tracks = useTracks([Track.Source.Camera])
+
+  useEffect(() => {
+    if (localParticipant) localParticipant.setMicrophoneEnabled(!isMuted).catch(() => {})
+  }, [isMuted, localParticipant])
+
+  useEffect(() => {
+    if (localParticipant) localParticipant.setCameraEnabled(!isVideoOff).catch(() => {})
+  }, [isVideoOff, localParticipant])
+
+  return (
+    <div className={cn('relative bg-black', isFullscreen ? 'w-full h-full' : 'w-full aspect-video')}>
+      {tracks.map((trackRef) =>
+        trackRef.publication.kind === 'video' ? (
+          <VideoTrack
+            key={trackRef.publication.trackSid}
+            trackRef={trackRef}
+            className={cn(
+              'absolute inset-0 w-full h-full',
+              isFullscreen ? 'object-contain' : 'object-cover',
+            )}
+          />
+        ) : null,
+      )}
+      {isPrivate && (
+        <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-purple-700/90 text-white text-xs font-bold px-2.5 py-1 rounded-full backdrop-blur-sm pointer-events-none">
+          <Lock className="h-3 w-3" /> PRIVATE
+        </div>
+      )}
     </div>
   )
 }
+
+// ─── LiveBroadcast ────────────────────────────────────────────────────────────
+
+function LiveBroadcast({
+  token,
+  serverUrl,
+  isPrivate,
+  onDisconnect,
+  isMuted,
+  isVideoOff,
+  isFullscreen,
+}: {
+  token: string
+  serverUrl: string
+  isPrivate: boolean
+  onDisconnect: () => void
+  isMuted: boolean
+  isVideoOff: boolean
+  isFullscreen: boolean
+}) {
+  return (
+    <LiveKitRoom
+      video
+      audio
+      token={token}
+      serverUrl={serverUrl}
+      onDisconnected={onDisconnect}
+      className={cn('bg-black', isFullscreen ? 'w-full h-full' : 'w-full aspect-video')}
+    >
+      <PublishedTracks
+        isPrivate={isPrivate}
+        isMuted={isMuted}
+        isVideoOff={isVideoOff}
+        isFullscreen={isFullscreen}
+      />
+    </LiveKitRoom>
+  )
+}
+
+// ─── StateBadge ───────────────────────────────────────────────────────────────
+
+function StateBadge({ state, isPrivate }: { state: BroadcastState; isPrivate: boolean }) {
+  if (state === 'STARTING') {
+    return (
+      <span className="flex items-center gap-1.5 bg-black/60 text-white/80 text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm">
+        <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+        Starting…
+      </span>
+    )
+  }
+  if (state === 'PREVIEW_LOCAL' || state === 'ENDED') {
+    return (
+      <span className="flex items-center gap-1.5 bg-black/60 text-white/70 text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm uppercase tracking-wider">
+        Preview
+      </span>
+    )
+  }
+  if (isPrivate) {
+    return (
+      <span className="flex items-center gap-1.5 bg-purple-700/90 text-white text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm">
+        <Lock className="h-3 w-3" /> Private
+      </span>
+    )
+  }
+  return (
+    <span className="flex items-center gap-2 bg-red-600/90 text-white text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm">
+      <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+      LIVE
+    </span>
+  )
+}
+
+// ─── IconControlButton ────────────────────────────────────────────────────────
+
+function IconControlButton({
+  onClick,
+  active,
+  title,
+  disabled,
+  children,
+}: {
+  onClick: () => void
+  active?: boolean
+  title?: string
+  disabled?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={cn(
+        'h-9 w-9 flex items-center justify-center rounded-full transition-all select-none',
+        active
+          ? 'bg-red-600 text-white hover:bg-red-700'
+          : 'bg-black/50 text-white hover:bg-black/75 backdrop-blur-sm',
+        disabled && 'opacity-50 cursor-not-allowed',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+// ─── VideoContainer ───────────────────────────────────────────────────────────
+
+interface VideoContainerProps {
+  state: BroadcastState
+  livekitToken: string | null
+  livekitUrl: string | null
+  isMuted: boolean
+  isVideoOff: boolean
+  isPrivate: boolean
+  containerRef: React.RefObject<HTMLDivElement>
+  onToggleMute: () => void
+  onToggleVideo: () => void
+  onGoLive: () => void
+  onEndRoom: () => void
+  onCaptureThumbnail: () => void
+  onDisconnect: () => void
+  loadingGoLive: boolean
+  loadingEnd: boolean
+  loadingCapture: boolean
+}
+
+function VideoContainer({
+  state,
+  livekitToken,
+  livekitUrl,
+  isMuted,
+  isVideoOff,
+  isPrivate,
+  containerRef,
+  onToggleMute,
+  onToggleVideo,
+  onGoLive,
+  onEndRoom,
+  onCaptureThumbnail,
+  onDisconnect,
+  loadingGoLive,
+  loadingEnd,
+  loadingCapture,
+}: VideoContainerProps) {
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [controlsVisible, setControlsVisible] = useState(true)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const isLive = state === 'LIVE_PUBLIC' || state === 'LIVE_PRIVATE'
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  const scheduleHide = useCallback(() => {
+    clearTimeout(hideTimerRef.current)
+    hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3000)
+  }, [])
+
+  const handleMouseMove = useCallback(() => {
+    setControlsVisible(true)
+    if (isLive) scheduleHide()
+  }, [isLive, scheduleHide])
+
+  const handleMouseLeave = useCallback(() => {
+    if (isLive) {
+      clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = setTimeout(() => setControlsVisible(false), 800)
+    }
+  }, [isLive])
+
+  useEffect(() => {
+    if (!isLive) {
+      setControlsVisible(true)
+      clearTimeout(hideTimerRef.current)
+    } else {
+      scheduleHide()
+    }
+    return () => clearTimeout(hideTimerRef.current)
+  }, [isLive, scheduleHide])
+
+  const toggleFullscreen = useCallback(() => {
+    if (!isFullscreen) {
+      containerRef.current?.requestFullscreen()
+    } else {
+      document.exitFullscreen()
+    }
+  }, [isFullscreen, containerRef])
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      className={cn(
+        'relative overflow-hidden rounded-xl border border-border bg-black',
+        isFullscreen && 'h-screen rounded-none border-none',
+      )}
+    >
+      {/* Video */}
+      {state === 'PREVIEW_LOCAL' || state === 'STARTING' || state === 'ENDED' ? (
+        <LocalPreview isFullscreen={isFullscreen} />
+      ) : livekitToken && livekitUrl ? (
+        <LiveBroadcast
+          key={isPrivate ? 'private' : 'public'}
+          token={livekitToken}
+          serverUrl={livekitUrl}
+          isPrivate={isPrivate}
+          onDisconnect={onDisconnect}
+          isMuted={isMuted}
+          isVideoOff={isVideoOff}
+          isFullscreen={isFullscreen}
+        />
+      ) : null}
+
+      {/* Overlay (auto-hides when live) */}
+      <div
+        className={cn(
+          'absolute inset-0 flex flex-col justify-between pointer-events-none transition-opacity duration-300',
+          controlsVisible ? 'opacity-100' : 'opacity-0',
+        )}
+      >
+        {/* Top bar */}
+        <div className="flex items-start justify-between p-3 pointer-events-auto">
+          <StateBadge state={state} isPrivate={isPrivate} />
+          <div className="flex items-center gap-2">
+            <IconControlButton
+              onClick={onCaptureThumbnail}
+              title="Capture thumbnail"
+              disabled={loadingCapture}
+            >
+              <Camera className="h-4 w-4" />
+            </IconControlButton>
+            <IconControlButton
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </IconControlButton>
+          </div>
+        </div>
+
+        {/* Bottom bar */}
+        <div className="bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-14 p-4 pointer-events-auto">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex gap-2">
+              {isLive && (
+                <>
+                  <IconControlButton
+                    onClick={onToggleMute}
+                    active={isMuted}
+                    title={isMuted ? 'Unmute mic' : 'Mute mic'}
+                  >
+                    {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  </IconControlButton>
+                  <IconControlButton
+                    onClick={onToggleVideo}
+                    active={isVideoOff}
+                    title={isVideoOff ? 'Enable camera' : 'Disable camera'}
+                  >
+                    {isVideoOff ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+                  </IconControlButton>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {state === 'PREVIEW_LOCAL' && (
+                <Button
+                  onClick={onGoLive}
+                  loading={loadingGoLive}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold tracking-wide px-6"
+                >
+                  ● Go Live
+                </Button>
+              )}
+              {state === 'STARTING' && (
+                <span className="text-white/70 text-sm animate-pulse">Starting broadcast…</span>
+              )}
+              {isLive && (
+                <Button
+                  onClick={onEndRoom}
+                  loading={loadingEnd}
+                  variant="destructive"
+                  size="sm"
+                  className="font-bold"
+                >
+                  End Broadcast
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── StatChip ─────────────────────────────────────────────────────────────────
+
+function StatChip({
+  icon: Icon,
+  label,
+  value,
+  accent = false,
+}: {
+  icon: LucideIcon
+  label: string
+  value: string | number
+  accent?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-3 rounded-xl border px-4 py-3 flex-1 min-w-0',
+        accent ? 'border-primary/40 bg-primary/10' : 'border-border bg-card',
+      )}
+    >
+      <Icon className={cn('h-5 w-5 shrink-0', accent ? 'text-primary' : 'text-muted-foreground')} />
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground truncate">
+          {label}
+        </p>
+        <p className="text-base font-bold leading-tight tabular-nums">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── GoLivePage ───────────────────────────────────────────────────────────────
 
 export function GoLivePage() {
   const navigate = useNavigate()
@@ -178,20 +505,37 @@ export function GoLivePage() {
   const [privateStartedAt, setPrivateStartedAt] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
   const [eventFilter, setEventFilter] = useState<EventFilter>('ALL')
-  const [liveGoal, setLiveGoal] = useState<{ id: string; title: string; targetTokens: number; currentTokens: number } | undefined>()
+  const [liveGoal, setLiveGoal] = useState<{
+    id: string
+    title: string
+    targetTokens: number
+    currentTokens: number
+  } | undefined>()
+  const [isMuted, setIsMuted] = useState(false)
+  const [isVideoOff, setIsVideoOff] = useState(false)
   const videoContainerRef = useRef<HTMLDivElement>(null)
 
-  const mutation = useGoLive()
+  const goLiveMutation = useGoLive()
   const endMutation = useEndRoom()
   const endPrivateMutation = useEndPrivateSession()
   const getLivekitToken = useGetLivekitToken()
   const captureThumbnail = useCaptureRoomThumbnail()
+  const acceptMutation = useAcceptPrivateSession()
+  const startPrivateMutation = useStartPrivateSession()
+  const muteMutation = useMuteRoomUser()
+  const unmuteMutation = useUnmuteRoomUser()
+  const kickMutation = useKickRoomUser()
+  const banMutation = useBanCreatorUser()
+  const rewardMutation = useRewardRoomUser()
+  const deleteMessageMutation = useDeleteRoomMessage()
+  const pinMessageMutation = usePinRoomMessage()
 
   const { data: messagesData } = useRoomMessages(roomId!)
   const initialMessages = useMemo(
     () => (messagesData?.data as ChatMessageDto[] | undefined) ?? [],
     [messagesData?.data],
   )
+
   const onTipCreated = useCallback((payload: { tip: { amountTokens: number } }) => {
     toast.success(`Tip received: ${payload.tip.amountTokens} tokens`)
   }, [])
@@ -199,9 +543,12 @@ export function GoLivePage() {
     if (payload.reward.type === 'VIP') toast.success('Viewer marked VIP')
     if (payload.reward.type === 'UNVIP') toast.success('Viewer removed from VIP')
   }, [])
-  const onGoalUpdated = useCallback((payload: { goal: { currentTokens: number; targetTokens: number; title: string; id: string } }) => {
-    setLiveGoal(payload.goal)
-  }, [])
+  const onGoalUpdated = useCallback(
+    (payload: { goal: { currentTokens: number; targetTokens: number; title: string; id: string } }) => {
+      setLiveGoal(payload.goal)
+    },
+    [],
+  )
   const onPrivateRequestCreated = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['creator-private-sessions', roomId] })
     toast.info('New private session request')
@@ -214,15 +561,28 @@ export function GoLivePage() {
   const onMessagePinned = useCallback(() => {
     toast.success('Message pinned')
   }, [])
+
   const socketCallbacks = useMemo(
-    () => ({ onTipCreated, onUserRewarded, onGoalUpdated, onPrivateRequestCreated, onRoomEnded, onMessagePinned }),
+    () => ({
+      onTipCreated,
+      onUserRewarded,
+      onGoalUpdated,
+      onPrivateRequestCreated,
+      onRoomEnded,
+      onMessagePinned,
+    }),
     [onTipCreated, onUserRewarded, onGoalUpdated, onPrivateRequestCreated, onRoomEnded, onMessagePinned],
   )
-  const { messages, viewerCount, pinnedMessage, markMessageDeleted } = useRoomSocket(roomId, initialMessages, socketCallbacks)
+  const { messages, viewerCount, pinnedMessage, markMessageDeleted } = useRoomSocket(
+    roomId,
+    initialMessages,
+    socketCallbacks,
+  )
+
   const { data: roomMenuData } = useRoomMenu(roomId!)
   const { data: earningsData } = useCreatorEarnings({ limit: 10 })
-
   const { data: privateReqs } = useCreatorPrivateSessions(roomId!)
+
   const pendingRequests = privateReqs?.data?.filter((r: any) => r.status === 'REQUESTED') || []
   const menuGoal = roomMenuData?.data?.goal
   useEffect(() => {
@@ -230,30 +590,17 @@ export function GoLivePage() {
   }, [menuGoal])
   const goal = liveGoal ?? menuGoal
   const pendingEarnings = (earningsData as any)?.data?.pendingTokenBalance ?? 0
-  
-  const acceptMutation = useAcceptPrivateSession()
-  const startPrivateMutation = useStartPrivateSession()
-  const muteMutation = useMuteRoomUser()
-  const unmuteMutation = useUnmuteRoomUser()
-  const kickMutation = useKickRoomUser()
-  const banMutation = useBanCreatorUser()
-  const rewardMutation = useRewardRoomUser()
-  const deleteMessageMutation = useDeleteRoomMessage()
-  const pinMessageMutation = usePinRoomMessage()
-
-  const viewerMap = new Map<string, any>()
-  messages.forEach((event) => {
-    if (event.message.user?.id) viewerMap.set(event.message.user.id, event.message.user)
-  })
-  pendingRequests.forEach((request: any) => {
-    const viewer = request.viewer ?? { id: request.viewerId, displayName: request.viewerId }
-    if (viewer?.id) viewerMap.set(viewer.id, viewer)
-  })
-  const activeViewers = Array.from(viewerMap.values())
-  const recentTips = messages.filter((event) => event.type === 'tip').slice(-5).reverse()
+  const displayViewerCount = viewerCount ?? room?.viewerCount ?? 0
   const roomTokensEarned = messages.reduce((sum, event) => sum + tipAmountFromEvent(event), 0)
-  const elapsedPrivateSeconds = privateStartedAt ? Math.max(0, Math.floor((now - privateStartedAt) / 1000)) : 0
-  const elapsedPrivateMinutes = currentPrivateSession ? Math.max(1, Math.ceil(elapsedPrivateSeconds / 60)) : 0
+  const recentTips = messages.filter((event) => event.type === 'tip').slice(-5).reverse()
+  const isPrivate = state === 'LIVE_PRIVATE'
+
+  const elapsedPrivateSeconds = privateStartedAt
+    ? Math.max(0, Math.floor((now - privateStartedAt) / 1000))
+    : 0
+  const elapsedPrivateMinutes = currentPrivateSession
+    ? Math.max(1, Math.ceil(elapsedPrivateSeconds / 60))
+    : 0
   const privateCapturedEstimate = currentPrivateSession
     ? Math.min(
         currentPrivateSession.reservedTokens ?? 0,
@@ -263,7 +610,6 @@ export function GoLivePage() {
   const privateBalanceEstimate = currentPrivateSession
     ? Math.max(0, (currentPrivateSession.reservedTokens ?? 0) - privateCapturedEstimate)
     : 0
-  const displayViewerCount = viewerCount ?? room?.viewerCount ?? 0
 
   useEffect(() => {
     if (state !== 'LIVE_PRIVATE') return
@@ -271,13 +617,14 @@ export function GoLivePage() {
     return () => window.clearInterval(timer)
   }, [state])
 
+  // ─── handlers ──────────────────────────────────────────────────────────────
+
   const handleGoLive = async () => {
     try {
       setState('STARTING')
-      const res = await mutation.mutateAsync(roomId!)
+      const res = await goLiveMutation.mutateAsync(roomId!)
       setLivekitToken((res as any).data.livekitToken)
       setLivekitUrl((res as any).data.livekitUrl)
-
       setState('LIVE_PUBLIC')
       toast.success("You're live!")
     } catch (err) {
@@ -306,17 +653,15 @@ export function GoLivePage() {
       await acceptMutation.mutateAsync(sessionId)
       const res = await startPrivateMutation.mutateAsync(sessionId)
       const session = (res as any).data.privateSession
-      
       if ((res as any).data.livekitToken) {
-         setLivekitToken((res as any).data.livekitToken)
-         setLivekitUrl((res as any).data.livekitUrl)
+        setLivekitToken((res as any).data.livekitToken)
+        setLivekitUrl((res as any).data.livekitUrl)
       }
-      
       setCurrentPrivateSession(session)
       setPrivateStartedAt(Date.now())
       setState('LIVE_PRIVATE')
-      toast.success('Transitioned to Private Session')
-    } catch (e) {
+      toast.success('Private session started')
+    } catch {
       setState('LIVE_PUBLIC')
       toast.error('Failed to accept private session')
     }
@@ -326,7 +671,10 @@ export function GoLivePage() {
     if (!currentPrivateSession) return
     try {
       await endPrivateMutation.mutateAsync(currentPrivateSession.id)
-      const publicToken = await getLivekitToken.mutateAsync({ appRoomType: 'PUBLIC_ROOM', appRoomId: roomId! })
+      const publicToken = await getLivekitToken.mutateAsync({
+        appRoomType: 'PUBLIC_ROOM',
+        appRoomId: roomId!,
+      })
       setLivekitToken((publicToken as any).data.token)
       setLivekitUrl((publicToken as any).data.livekitUrl)
       setCurrentPrivateSession(null)
@@ -344,7 +692,6 @@ export function GoLivePage() {
       toast.error('No camera feed to capture')
       return
     }
-
     try {
       const formData = await captureVideoFrameAsFormData(video)
       await captureThumbnail.mutateAsync({ roomId: roomId!, formData })
@@ -363,10 +710,15 @@ export function GoLivePage() {
     }
   }
 
-  function handleUserAction(action: 'mute' | 'unmute' | 'kick' | 'ban' | 'shoutout' | 'vip' | 'unvip', targetUserId: string) {
+  function handleUserAction(
+    action: 'mute' | 'unmute' | 'kick' | 'ban' | 'shoutout' | 'vip' | 'unvip',
+    targetUserId: string,
+  ) {
     const base = { roomId: roomId!, targetUserId, reason: 'Live room control' }
     if (action === 'mute') {
-      runModeration('Viewer muted', () => muteMutation.mutateAsync({ ...base, durationSeconds: 5 * 60 }))
+      runModeration('Viewer muted', () =>
+        muteMutation.mutateAsync({ ...base, durationSeconds: 5 * 60 }),
+      )
     } else if (action === 'unmute') {
       runModeration('Viewer unmuted', () => unmuteMutation.mutateAsync(base))
     } else if (action === 'kick') {
@@ -376,7 +728,12 @@ export function GoLivePage() {
     } else {
       const rewardType = action === 'vip' ? 'VIP' : action === 'unvip' ? 'UNVIP' : 'SHOUTOUT'
       runModeration(action === 'unvip' ? 'VIP removed' : 'Viewer rewarded', () =>
-        rewardMutation.mutateAsync({ roomId: roomId!, targetUserId, type: rewardType, note: 'Live room control' }),
+        rewardMutation.mutateAsync({
+          roomId: roomId!,
+          targetUserId,
+          type: rewardType,
+          note: 'Live room control',
+        }),
       )
     }
   }
@@ -389,179 +746,264 @@ export function GoLivePage() {
   }
 
   function handlePinMessage(messageId: string) {
-    runModeration('Message pinned', () => pinMessageMutation.mutateAsync({ roomId: roomId!, messageId }))
+    runModeration('Message pinned', () =>
+      pinMessageMutation.mutateAsync({ roomId: roomId!, messageId }),
+    )
   }
 
-  if (!room) return <div className="p-8">Loading room...</div>
+  // ─── viewer map ────────────────────────────────────────────────────────────
+
+  const viewerMap = new Map<string, any>()
+  messages.forEach((event) => {
+    if (event.message.user?.id) viewerMap.set(event.message.user.id, event.message.user)
+  })
+  pendingRequests.forEach((request: any) => {
+    const viewer = request.viewer ?? { id: request.viewerId, displayName: request.viewerId }
+    if (viewer?.id) viewerMap.set(viewer.id, viewer)
+  })
+  const activeViewers = Array.from(viewerMap.values())
+
+  if (!room) {
+    return <div className="p-8 text-muted-foreground animate-pulse">Loading studio…</div>
+  }
+
+  const goalPct = goal
+    ? Math.min(100, Math.round((goal.currentTokens / goal.targetTokens) * 100))
+    : 0
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6 h-[calc(100vh-8rem)]">
-      
-      <div className="flex flex-col space-y-4 min-w-0">
-        <div className="flex justify-between items-center bg-card p-4 rounded-lg border border-border">
-          <div>
-            <h1 className="text-xl font-bold">{room.title}</h1>
-            <p className="text-sm text-muted-foreground">
-              {state === 'LIVE_PRIVATE' ? 'PRIVATE SESSION ACTIVE | public room paused / unavailable' : `State: ${state}`} | Viewers: {displayViewerCount}
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-4 xl:gap-6 items-start">
+
+      {/* ── Left column ── */}
+      <div className="flex flex-col gap-4">
+
+        {/* Room header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold leading-tight truncate">{room.title}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isPrivate
+                ? 'Private session active — public room paused'
+                : state === 'LIVE_PUBLIC'
+                  ? 'Broadcasting live'
+                  : state === 'STARTING'
+                    ? 'Starting broadcast…'
+                    : 'Ready to broadcast'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {state === 'PREVIEW_LOCAL' && (
-              <Button onClick={handleGoLive} loading={mutation.isPending} className={goLiveButtonClass}>
-                Go Live
-              </Button>
-            )}
-            {(state === 'LIVE_PUBLIC' || state === 'LIVE_PRIVATE') && (
-              <Button onClick={handleEndRoom} loading={endMutation.isPending} className={liveRecordingButtonClass}>
-                LIVE
-              </Button>
-            )}
+          <div className="flex items-center gap-4 shrink-0 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Users className="h-4 w-4" />
+              <span className="font-semibold text-foreground">{displayViewerCount}</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Coins className="h-4 w-4" />
+              <span className="font-semibold text-foreground">{roomTokensEarned}</span>
+            </span>
           </div>
         </div>
 
-        <div ref={videoContainerRef} className="flex-1 bg-black rounded-lg">
-          {state === 'PREVIEW_LOCAL' || state === 'STARTING' || state === 'ENDED' ? (
-             <LocalPreview />
-          ) : (
-             <LiveBroadcast 
-                key={state === 'LIVE_PRIVATE' ? `private-${currentPrivateSession?.id}` : `public-${roomId}`}
-                roomName={roomId!} 
-                token={livekitToken} 
-                serverUrl={livekitUrl} 
-                isPrivate={state === 'LIVE_PRIVATE'} 
-                onDisconnect={() => setState('ENDED')} 
-             />
-          )}
-        </div>
+        {/* Video with floating controls */}
+        <VideoContainer
+          state={state}
+          livekitToken={livekitToken}
+          livekitUrl={livekitUrl}
+          isMuted={isMuted}
+          isVideoOff={isVideoOff}
+          isPrivate={isPrivate}
+          containerRef={videoContainerRef}
+          onToggleMute={() => setIsMuted((m) => !m)}
+          onToggleVideo={() => setIsVideoOff((v) => !v)}
+          onGoLive={handleGoLive}
+          onEndRoom={handleEndRoom}
+          onCaptureThumbnail={handleCaptureThumbnail}
+          onDisconnect={() => setState('ENDED')}
+          loadingGoLive={goLiveMutation.isPending}
+          loadingEnd={endMutation.isPending}
+          loadingCapture={captureThumbnail.isPending}
+        />
 
+        {/* Private session status bar */}
         {state === 'LIVE_PRIVATE' && currentPrivateSession && (
-          <div className="rounded-lg border border-primary bg-primary/10 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 font-semibold text-primary">
-                  <Lock className="h-4 w-4" />
-                  PRIVATE SESSION ACTIVE
-                </div>
-                <p className="text-sm text-muted-foreground">Public room paused / unavailable</p>
-              </div>
-              <Button variant="destructive" size="sm" loading={endPrivateMutation.isPending} onClick={handleEndPrivate}>
-                End Private
-              </Button>
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-purple-500/30 bg-purple-950/40 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-purple-400" />
+              <span className="text-sm font-semibold text-purple-300">Private Session</span>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-4">
-              <Metric label="Rate" value={`${currentPrivateSession.rateTokensPerMinute} / min`} />
-              <Metric label="Elapsed" value={formatElapsed(elapsedPrivateSeconds)} />
-              <Metric label="Captured" value={`${privateCapturedEstimate} tokens`} />
-              <Metric label="Reserve Left" value={`${privateBalanceEstimate} tokens`} />
+            <div className="flex flex-wrap items-center gap-5 text-sm">
+              <span className="text-muted-foreground">
+                <span className="font-semibold text-foreground">
+                  {currentPrivateSession.rateTokensPerMinute}
+                </span>{' '}
+                tkns/min
+              </span>
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                <span className="font-semibold text-foreground tabular-nums">
+                  {formatElapsed(elapsedPrivateSeconds)}
+                </span>
+              </span>
+              <span className="text-muted-foreground">
+                Captured:{' '}
+                <span className="font-semibold text-green-400">{privateCapturedEstimate}</span>
+              </span>
+              <span className="text-muted-foreground">
+                Reserve:{' '}
+                <span className="font-semibold text-foreground">{privateBalanceEstimate}</span>
+              </span>
             </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              loading={endPrivateMutation.isPending}
+              onClick={handleEndPrivate}
+            >
+              End Private
+            </Button>
           </div>
         )}
 
-        <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              <Image className="h-4 w-4" />
-              Public Thumbnail
-            </div>
-            <p className="mb-3 text-xs text-muted-foreground">
-              This is the image viewers see on the browse grid. Capture a frame from your preview or live video — there is no separate cover upload for rooms.
-            </p>
-            <div className="aspect-video overflow-hidden rounded border border-border bg-muted">
-              {room.thumbnailUrl ? (
-                <img src={room.thumbnailUrl} alt="Current public thumbnail" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground"></div>
-              )}
-            </div>
-            <div className="mt-3">
-              <Button size="sm" variant="outline" loading={captureThumbnail.isPending} onClick={handleCaptureThumbnail}>
-                <Camera className="h-4 w-4" />
-                Capture current frame as thumbnail
-              </Button>
-            </div>
+        {/* Economy */}
+        <div className="rounded-xl border border-border bg-card p-5 space-y-5">
+          <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Studio Economy
+          </h2>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatChip icon={Users} label="Viewers" value={displayViewerCount} />
+            <StatChip
+              icon={Coins}
+              label="Session Tips"
+              value={roomTokensEarned.toLocaleString()}
+              accent={roomTokensEarned > 0}
+            />
+            <StatChip
+              icon={TrendingUp}
+              label="Pending Earnings"
+              value={pendingEarnings.toLocaleString()}
+            />
+            <StatChip
+              icon={Lock}
+              label="Private Reqs"
+              value={pendingRequests.length}
+              accent={pendingRequests.length > 0}
+            />
           </div>
 
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              <Coins className="h-4 w-4" />
-              Room Economy
-            </div>
-            <div className="grid gap-3 sm:grid-cols-4">
-              <Metric label="Room Tips" value={`${roomTokensEarned} tokens`} />
-              <Metric label="Pending Requests" value={pendingRequests.length.toString()} />
-              <Metric label="Pending Earnings" value={`${pendingEarnings} tokens`} />
-              <Metric label="Goal" value={goal ? `${goal.currentTokens}/${goal.targetTokens}` : 'None'} />
-            </div>
-            <div className="mt-4 space-y-2">
-              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recent Tips</h3>
-              {recentTips.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No tips yet.</p>
-              ) : (
-                recentTips.map((tip) => (
-                  <div key={tip.message.id} className="flex items-center justify-between rounded border border-border px-2 py-1 text-sm">
-                    <span>{userLabel(tip.message.user)}</span>
-                    <span className="font-medium">{tip.amountTokens} tokens</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-card p-4 rounded-lg border border-border flex-shrink-0">
-          <h3 className="font-semibold mb-2">Pending Private Requests ({pendingRequests.length})</h3>
-          {pendingRequests.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No requests at the moment.</p>
-          ) : (
+          {/* Goal bar */}
+          {goal && (
             <div className="space-y-2">
-              {pendingRequests.map((req: any) => (
-                <div key={req.id} className="flex flex-wrap justify-between items-center gap-3 bg-muted/50 p-2 rounded border border-border">
-                  <div>
-                    <span className="font-medium">{userLabel(req.viewer ?? { id: req.viewerId })}</span>
-                    <span className="text-xs text-muted-foreground ml-2">({req.minMinutes} mins @ {req.rateTokensPerMinute} tkns/min)</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <ModerationButtons userId={req.viewer?.id ?? req.viewerId} onUserAction={handleUserAction} />
-                    <Button size="sm" onClick={() => handleAcceptPrivate(req.id)} loading={acceptMutation.isPending}>
-                      Accept
-                    </Button>
-                  </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Target className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-sm font-semibold">{goal.title}</span>
+                </div>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {goal.currentTokens.toLocaleString()} / {goal.targetTokens.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-700"
+                  style={{ width: `${goalPct}%` }}
+                />
+              </div>
+              <p className="text-right text-[10px] text-muted-foreground">{goalPct}% of goal</p>
+            </div>
+          )}
+
+          {/* Recent tips */}
+          {recentTips.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Recent Tips
+              </p>
+              {recentTips.slice(0, 4).map((tip) => (
+                <div
+                  key={tip.message.id}
+                  className="flex items-center justify-between text-sm px-3 py-1.5 rounded-lg bg-muted/40 border border-transparent hover:border-border transition-colors"
+                >
+                  <span className="text-muted-foreground truncate">{userLabel(tip.message.user)}</span>
+                  <span className="font-bold text-primary ml-3 shrink-0">
+                    +{tip.amountTokens}
+                  </span>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* Pending private requests */}
+        {pendingRequests.length > 0 && (
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              Private Requests ({pendingRequests.length})
+            </h2>
+            {pendingRequests.map((req: any) => (
+              <div
+                key={req.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/30 border border-border px-3 py-2.5"
+              >
+                <div>
+                  <p className="text-sm font-semibold">
+                    {userLabel(req.viewer ?? { id: req.viewerId })}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {req.minMinutes} min · {req.rateTokensPerMinute} tkns/min
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ModerationButtons
+                    userId={req.viewer?.id ?? req.viewerId}
+                    onUserAction={handleUserAction}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleAcceptPrivate(req.id)}
+                    loading={acceptMutation.isPending}
+                  >
+                    Accept
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-col space-y-4 h-full min-h-0">
-        <div className="bg-card rounded-lg border border-border overflow-hidden">
-          <div className="p-3 border-b border-border bg-muted/20 font-semibold text-sm uppercase tracking-wide">
-            Recent Viewers
-          </div>
-          <div className="p-3 space-y-2">
-            {activeViewers.length === 0 ? (
-              <div className="text-sm text-muted-foreground italic">No viewer activity yet...</div>
-            ) : (
-              activeViewers.map((viewer) => (
-                <div key={viewer.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border px-2 py-2">
-                  <span className="text-sm font-medium">{userLabel(viewer)}</span>
+      {/* ── Right column: chat + viewers ── */}
+      <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:h-[calc(100vh-2rem)] xl:overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <CreatorEventLog
+            messages={messages}
+            pinnedMessage={pinnedMessage}
+            eventFilter={eventFilter}
+            onEventFilterChange={setEventFilter}
+            onUserAction={handleUserAction}
+            onDeleteMessage={handleDeleteMessage}
+            onPinMessage={handlePinMessage}
+          />
+        </div>
+
+        {activeViewers.length > 0 && (
+          <div className="rounded-xl border border-border bg-card p-3 space-y-2 shrink-0">
+            <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-1">
+              Recent Viewers ({activeViewers.length})
+            </h2>
+            <div className="space-y-0.5 max-h-36 overflow-y-auto">
+              {activeViewers.map((viewer) => (
+                <div
+                  key={viewer.id}
+                  className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/40 transition-colors"
+                >
+                  <span className="text-sm font-medium truncate">{userLabel(viewer)}</span>
                   <ModerationButtons userId={viewer.id} onUserAction={handleUserAction} />
                 </div>
-              ))
-            )}
+              ))}
+            </div>
           </div>
-        </div>
-        <CreatorEventLog
-          messages={messages}
-          pinnedMessage={pinnedMessage}
-          eventFilter={eventFilter}
-          onEventFilterChange={setEventFilter}
-          onUserAction={handleUserAction}
-          onDeleteMessage={handleDeleteMessage}
-          onPinMessage={handlePinMessage}
-        />
+        )}
       </div>
-
     </div>
   )
 }

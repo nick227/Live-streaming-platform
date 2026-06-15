@@ -68,15 +68,15 @@ function CameraPreview() {
   }, [])
 
   return (
-    <div className="rounded-lg overflow-hidden bg-black aspect-video relative flex items-center justify-center">
+    <div className="rounded-xl overflow-hidden bg-black relative">
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className="w-full h-full object-cover transform scale-x-[-1]"
+        className="w-full block transform scale-x-[-1]"
       />
-      <div className="absolute bottom-2 left-2 right-2 text-white text-xs text-center drop-shadow-md bg-black/40 py-1 rounded">
+      <div className="absolute bottom-2 left-2 right-2 text-white text-xs text-center drop-shadow-md bg-black/50 py-1 rounded-full backdrop-blur-sm">
         Camera & Mic Test
       </div>
     </div>
@@ -154,7 +154,7 @@ export function PrepareRoomPage() {
           </div>
           <select
             id="countryCode"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="w-full rounded border border-input-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             value={countryCode}
             onChange={(event) => setCountryCode(event.target.value)}
           >

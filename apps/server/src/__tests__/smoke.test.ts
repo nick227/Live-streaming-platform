@@ -1,9 +1,20 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { buildTestApp, asAuth, validateResponse, testUserId } from './helpers'
 import { io as SocketClient } from 'socket.io-client'
 import { db } from '@streamyolo/db'
 import { CreatorProfileService } from '../services/CreatorProfileService'
-import { AuthService } from '../services/AuthService'
+
+vi.mock('../services/LiveKitService', () => ({
+  LiveKitService: vi.fn().mockImplementation(() => ({
+    createRoom: vi.fn().mockResolvedValue(undefined),
+    deleteRoom: vi.fn().mockResolvedValue(undefined),
+    getToken: vi.fn().mockResolvedValue({
+      livekitUrl: 'wss://fake.livekit.cloud',
+      token: 'fake-livekit-jwt-token',
+      roomName: 'fake-room',
+    }),
+  })),
+}))
 
 const app = buildTestApp()
 

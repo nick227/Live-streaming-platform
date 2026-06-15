@@ -8,6 +8,10 @@ export default {
       colors: {
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
+        card: {
+          DEFAULT: 'hsl(var(--surface))',
+          foreground: 'hsl(var(--surface-foreground))',
+        },
         surface: {
           DEFAULT: 'hsl(var(--surface))',
           foreground: 'hsl(var(--surface-foreground))',
@@ -36,6 +40,8 @@ export default {
         DEFAULT: 'var(--radius)',
         sm: 'var(--radius-sm)',
         lg: 'var(--radius-lg)',
+        xl: '1rem',
+        '2xl': '1.25rem',
         full: '9999px',
       },
       fontFamily: {

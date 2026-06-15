@@ -15,7 +15,7 @@ export function Shell() {
     <div className="min-h-screen bg-background">
       <TopBar wide={wide} />
       <main className="min-h-[calc(100vh-3.5rem)]">
-        <div className={cn('mx-auto px-4 py-4', wide ? 'max-w-7xl' : 'max-w-3xl')}>
+        <div className={cn('mx-auto px-4', wide ? 'max-w-7xl py-4' : 'max-w-3xl py-6')}>
           <ErrorBoundary key={pathname}>
             <Outlet />
           </ErrorBoundary>
