@@ -1,5 +1,6 @@
 import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
+import { CREATOR_INCLUDE } from './RoomService'
 import { createWriteStream, mkdirSync } from 'fs'
 import { resolve, extname } from 'path'
 import { nanoid } from 'nanoid'
@@ -112,7 +113,7 @@ export class MediaService {
     const updatedRoom = await db.room.update({
       where: { id: roomId },
       data: { thumbnailMediaId: asset.id },
-      include: { creator: { select: { id: true, userId: true, user: { select: { displayName: true } } } }, goal: true },
+      include: { creator: CREATOR_INCLUDE, goal: true, tags: { include: { tag: true } } },
     })
 
     return { media: asset, room: updatedRoom }

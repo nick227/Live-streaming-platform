@@ -65,7 +65,10 @@ export function useGoLive() {
           body: undefined as never,
         }),
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rooms'] })
+      qc.invalidateQueries({ queryKey: ['creator-profile'] })
+    },
   })
 }
 
@@ -79,7 +82,10 @@ export function useEndRoom() {
           body: undefined as never,
         }),
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rooms'] })
+      qc.invalidateQueries({ queryKey: ['creator-profile'] })
+    },
   })
 }
 

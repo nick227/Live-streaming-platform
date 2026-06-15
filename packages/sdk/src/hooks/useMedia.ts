@@ -25,6 +25,9 @@ export function useCaptureRoomThumbnail() {
       if (!response.ok) throw new ApiError(response.status, 'Capture failed')
       return response.json()
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
+    onSuccess: (_data, { roomId }) => {
+      qc.invalidateQueries({ queryKey: ['rooms'] })
+      qc.invalidateQueries({ queryKey: ['room', roomId] })
+    },
   })
 }

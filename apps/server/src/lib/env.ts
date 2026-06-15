@@ -48,3 +48,7 @@ function deriveTestDatabaseUrl(databaseUrl: string) {
 if (process.env.NODE_ENV === 'test' && process.env.DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? deriveTestDatabaseUrl(process.env.DATABASE_URL)
 }
+
+if (process.env.NODE_ENV === 'test') {
+  process.env.STORAGE_ENDPOINT = ''
+}

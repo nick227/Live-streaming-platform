@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useCaptureRoomThumbnail,
@@ -26,11 +26,15 @@ import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
 import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant } from '@livekit/components-react'
 import { Track } from 'livekit-client'
-import { Camera, Coins, Image, Lock, Upload } from 'lucide-react'
+import { Camera, Coins, Image, Lock } from 'lucide-react'
 import { useRoomSocket } from '@/components/chat/useRoomSocket'
+import { captureVideoFrameAsFormData } from '@/lib/captureVideoFrame'
 import type { ChatMessageDto, RoomEvent } from '@/components/chat/types'
 import { CreatorEventLog, ModerationButtons } from '@/components/chat/CreatorEventLog'
 import type { EventFilter } from '@/components/chat/eventFilter'
+
+const goLiveButtonClass = 'bg-black hover:bg-black/90 text-white'
+const liveRecordingButtonClass = 'bg-red-600 hover:bg-red-700 text-white'
 
 type BroadcastState =
   | 'PREVIEW_LOCAL'
@@ -175,6 +179,7 @@ export function GoLivePage() {
   const [now, setNow] = useState(Date.now())
   const [eventFilter, setEventFilter] = useState<EventFilter>('ALL')
   const [liveGoal, setLiveGoal] = useState<{ id: string; title: string; targetTokens: number; currentTokens: number } | undefined>()
+  const videoContainerRef = useRef<HTMLDivElement>(null)
 
   const mutation = useGoLive()
   const endMutation = useEndRoom()
@@ -275,9 +280,10 @@ export function GoLivePage() {
 
       setState('LIVE_PUBLIC')
       toast.success("You're live!")
-    } catch {
+    } catch (err) {
       setState('PREVIEW_LOCAL')
-      toast.error('Failed to go live. Ensure admin approval and setup is complete.')
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      toast.error(`Failed to go live: ${msg}`)
     }
   }
 
@@ -333,11 +339,18 @@ export function GoLivePage() {
   }
 
   const handleCaptureThumbnail = async () => {
+    const video = videoContainerRef.current?.querySelector('video')
+    if (!video) {
+      toast.error('No camera feed to capture')
+      return
+    }
+
     try {
-      await captureThumbnail.mutateAsync({ roomId: roomId!, formData: new FormData() })
+      const formData = await captureVideoFrameAsFormData(video)
+      await captureThumbnail.mutateAsync({ roomId: roomId!, formData })
       toast.success('Thumbnail captured')
-    } catch {
-      toast.error('Failed to capture thumbnail')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to capture thumbnail')
     }
   }
 
@@ -394,19 +407,19 @@ export function GoLivePage() {
           </div>
           <div className="flex items-center gap-2">
             {state === 'PREVIEW_LOCAL' && (
-              <Button onClick={handleGoLive} loading={mutation.isPending} className="bg-red-600 hover:bg-red-700 text-white">
+              <Button onClick={handleGoLive} loading={mutation.isPending} className={goLiveButtonClass}>
                 Go Live
               </Button>
             )}
             {(state === 'LIVE_PUBLIC' || state === 'LIVE_PRIVATE') && (
-              <Button onClick={handleEndRoom} loading={endMutation.isPending} variant="destructive">
-                End Broadcast
+              <Button onClick={handleEndRoom} loading={endMutation.isPending} className={liveRecordingButtonClass}>
+                LIVE
               </Button>
             )}
           </div>
         </div>
 
-        <div className="flex-1 bg-black rounded-lg">
+        <div ref={videoContainerRef} className="flex-1 bg-black rounded-lg">
           {state === 'PREVIEW_LOCAL' || state === 'STARTING' || state === 'ENDED' ? (
              <LocalPreview />
           ) : (
@@ -450,23 +463,20 @@ export function GoLivePage() {
               <Image className="h-4 w-4" />
               Public Thumbnail
             </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              This is the image viewers see on the browse grid. Capture a frame from your preview or live video — there is no separate cover upload for rooms.
+            </p>
             <div className="aspect-video overflow-hidden rounded border border-border bg-muted">
               {room.thumbnailUrl ? (
                 <img src={room.thumbnailUrl} alt="Current public thumbnail" className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No thumbnail</div>
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground"></div>
               )}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3">
               <Button size="sm" variant="outline" loading={captureThumbnail.isPending} onClick={handleCaptureThumbnail}>
                 <Camera className="h-4 w-4" />
-                Make current frame thumbnail
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/media/upload">
-                  <Upload className="h-4 w-4" />
-                  Upload/change cover
-                </Link>
+                Capture current frame as thumbnail
               </Button>
             </div>
           </div>

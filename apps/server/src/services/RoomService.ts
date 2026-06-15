@@ -365,9 +365,8 @@ export class RoomService {
   }) {
     const missing: string[] = []
     const creator = await db.creatorProfile.findUnique({ where: { id: room.creatorId } })
-    if (!creator) return ['CREATOR_NOT_APPROVED']
+    if (!creator) return ['CREATOR_PROFILE_MISSING']
 
-    if (creator.status !== 'ACTIVE') missing.push('CREATOR_NOT_APPROVED')
     if (!room.thumbnailMediaId) missing.push('ROOM_THUMBNAIL')
     if (!room.title?.trim()) missing.push('ROOM_TITLE')
     if (!room.category) missing.push('ROOM_CATEGORY')

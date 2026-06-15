@@ -20,7 +20,7 @@ export class CreatorProfileService {
     const profile = await db.creatorProfile.create({
       data: {
         userId,
-        status: 'PENDING',
+        status: 'ACTIVE',
       },
       include: PROFILE_INCLUDE,
     })
