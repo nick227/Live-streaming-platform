@@ -118,6 +118,17 @@ export function useAdminCreators(params?: { cursor?: string; limit?: number; sta
   })
 }
 
+export function useAdminCreator(creatorId: string) {
+  return useQuery({
+    queryKey: ['admin', 'creator', creatorId],
+    queryFn: async () =>
+      unwrap(
+        await getApiClient().GET('/admin/creators/{creatorId}', { params: { path: { creatorId } } }),
+      ),
+    enabled: Boolean(creatorId),
+  })
+}
+
 export function useAdminApproveCreator() {
   const qc = useQueryClient()
   return useMutation({
@@ -267,6 +278,49 @@ export function useAdminReports(params?: { cursor?: string; limit?: number; stat
     queryKey: ['admin', 'reports', params],
     queryFn: async () =>
       unwrap(await getApiClient().GET('/admin/reports', { params: { query: params as any } })),
+  })
+}
+
+// ── Tags ──────────────────────────────────────────────────────────────────────
+
+export function useAdminTags() {
+  return useQuery({
+    queryKey: ['admin', 'tags'],
+    queryFn: async () => unwrap(await getApiClient().GET('/admin/tags')),
+  })
+}
+
+export function useAdminCreateTag() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: { slug: string; label: string; group?: string; sortOrder?: number }) =>
+      unwrap(await getApiClient().POST('/admin/tags', { body: body as any })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'tags'] }),
+  })
+}
+
+export function useAdminUpdateTag() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ tagId, ...body }: { tagId: string; label?: string; group?: string; sortOrder?: number; isActive?: boolean }) =>
+      unwrap(
+        await getApiClient().PATCH('/admin/tags/{tagId}', {
+          params: { path: { tagId } },
+          body: body as any,
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'tags'] }),
+  })
+}
+
+export function useAdminDeleteTag() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (tagId: string) =>
+      unwrap(
+        await getApiClient().DELETE('/admin/tags/{tagId}', { params: { path: { tagId } } }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'tags'] }),
   })
 }
 

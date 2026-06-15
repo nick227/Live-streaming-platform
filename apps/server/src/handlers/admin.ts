@@ -303,6 +303,47 @@ export async function adminHideMedia(request: any, reply: any) {
   return reply.send({ data: formatMediaAssetDto(media) })
 }
 
+// ── Creator detail ────────────────────────────────────────────────────────────
+
+export async function getAdminCreator(request: any, reply: any) {
+  const creator = await adminService.getCreator(request.params.creatorId)
+  return reply.send({ data: formatCreatorProfileDetail({ ...creator, user: creator.user }) })
+}
+
+// ── Tags ──────────────────────────────────────────────────────────────────────
+
+function formatAdminTag(tag: any) {
+  return {
+    id: tag.id,
+    slug: tag.slug,
+    label: tag.label,
+    group: tag.group ?? null,
+    sortOrder: tag.sortOrder,
+    isActive: tag.isActive,
+    createdAt: tag.createdAt.toISOString(),
+  }
+}
+
+export async function listAdminTags(_request: any, reply: any) {
+  const tags = await adminService.listTags()
+  return reply.send({ data: tags.map(formatAdminTag) })
+}
+
+export async function createAdminTag(request: any, reply: any) {
+  const tag = await adminService.createTag(request.body)
+  return reply.send({ data: formatAdminTag(tag) })
+}
+
+export async function updateAdminTag(request: any, reply: any) {
+  const tag = await adminService.updateTag(request.params.tagId, request.body)
+  return reply.send({ data: formatAdminTag(tag) })
+}
+
+export async function deleteAdminTag(request: any, reply: any) {
+  const result = await adminService.deleteTag(request.params.tagId)
+  return reply.send({ data: result })
+}
+
 // ── Reports ───────────────────────────────────────────────────────────────────
 
 export async function listAdminReports(request: any, reply: any) {

@@ -5,7 +5,10 @@ import {
   AdminAdjustWalletPage,
   AdminApproveCreatorPage,
   AdminApproveMediaPage,
+  AdminCreatorPage,
   AdminCreatorsPage,
+  AdminCreateTagPage,
+  AdminEditTagPage,
   AdminEndRoomPage,
   AdminForceEndPrivateSessionPage,
   AdminHideMediaPage,
@@ -22,6 +25,8 @@ import {
   AdminRoomsPage,
   AdminSuspendCreatorPage,
   AdminSuspendUserPage,
+  AdminTagsPage,
+  AdminTokenGrantsPage,
   AdminUserPage,
   AdminUsersPage,
   AdminWalletPage,
@@ -58,6 +63,7 @@ import {
 } from '@/pages'
 import { AuthGuard } from '@/lib/AuthGuard'
 import { Shell } from '@/components/layout/Shell'
+import { AdminShell } from '@/components/layout/AdminShell'
 
 export function App() {
   return (
@@ -108,29 +114,41 @@ export function App() {
           <Route path="/rooms/:roomId/thumbnail/capture" element={<CaptureRoomThumbnailPage />} />
           <Route path="/creator/earnings" element={<CreatorEarningsPage />} />
           <Route path="/reports" element={<CreateReportPage />} />
-          <Route path="/admin/overview" element={<AdminOverviewPage />} />
-          <Route path="/admin/rooms" element={<AdminRoomsPage />} />
-          <Route path="/admin/rooms/:roomId" element={<AdminRoomPage />} />
-          <Route path="/admin/rooms/:roomId/end" element={<AdminEndRoomPage />} />
-          <Route path="/admin/rooms/:roomId/hide" element={<AdminHideRoomPage />} />
-          <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="/admin/users/:userId" element={<AdminUserPage />} />
-          <Route path="/admin/users/:userId/suspend" element={<AdminSuspendUserPage />} />
-          <Route path="/admin/users/:userId/restore" element={<AdminRestoreUserPage />} />
-          <Route path="/admin/creators" element={<AdminCreatorsPage />} />
-          <Route path="/admin/creators/:creatorId/approve" element={<AdminApproveCreatorPage />} />
-          <Route path="/admin/creators/:creatorId/suspend" element={<AdminSuspendCreatorPage />} />
-          <Route path="/admin/payments" element={<AdminPaymentsPage />} />
-          <Route path="/admin/payments/:paymentId" element={<AdminPaymentPage />} />
-          <Route path="/admin/wallets/:userId" element={<AdminWalletPage />} />
-          <Route path="/admin/wallets/:userId/adjust" element={<AdminAdjustWalletPage />} />
-          <Route path="/admin/private-sessions" element={<AdminPrivateSessionsPage />} />
-          <Route path="/admin/private-sessions/:sessionId/force-end" element={<AdminForceEndPrivateSessionPage />} />
-          <Route path="/admin/media" element={<AdminMediaPage />} />
-          <Route path="/admin/media/:mediaId/approve" element={<AdminApproveMediaPage />} />
-          <Route path="/admin/media/:mediaId/hide" element={<AdminHideMediaPage />} />
-          <Route path="/admin/reports" element={<AdminReportsPage />} />
-          <Route path="/admin/reports/:reportId/review" element={<AdminReviewReportPage />} />
+          </Route>
+        </Route>
+
+        {/* Admin routes — own shell with sidebar nav + admin guard */}
+        <Route element={<AuthGuard />}>
+          <Route element={<AdminShell />}>
+            <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
+            <Route path="/admin/overview" element={<AdminOverviewPage />} />
+            <Route path="/admin/rooms" element={<AdminRoomsPage />} />
+            <Route path="/admin/rooms/:roomId" element={<AdminRoomPage />} />
+            <Route path="/admin/rooms/:roomId/end" element={<AdminEndRoomPage />} />
+            <Route path="/admin/rooms/:roomId/hide" element={<AdminHideRoomPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/users/:userId" element={<AdminUserPage />} />
+            <Route path="/admin/users/:userId/suspend" element={<AdminSuspendUserPage />} />
+            <Route path="/admin/users/:userId/restore" element={<AdminRestoreUserPage />} />
+            <Route path="/admin/creators" element={<AdminCreatorsPage />} />
+            <Route path="/admin/creators/:creatorId" element={<AdminCreatorPage />} />
+            <Route path="/admin/creators/:creatorId/approve" element={<AdminApproveCreatorPage />} />
+            <Route path="/admin/creators/:creatorId/suspend" element={<AdminSuspendCreatorPage />} />
+            <Route path="/admin/payments" element={<AdminPaymentsPage />} />
+            <Route path="/admin/payments/:paymentId" element={<AdminPaymentPage />} />
+            <Route path="/admin/wallets/:userId" element={<AdminWalletPage />} />
+            <Route path="/admin/wallets/:userId/adjust" element={<AdminAdjustWalletPage />} />
+            <Route path="/admin/private-sessions" element={<AdminPrivateSessionsPage />} />
+            <Route path="/admin/private-sessions/:sessionId/force-end" element={<AdminForceEndPrivateSessionPage />} />
+            <Route path="/admin/media" element={<AdminMediaPage />} />
+            <Route path="/admin/media/:mediaId/approve" element={<AdminApproveMediaPage />} />
+            <Route path="/admin/media/:mediaId/hide" element={<AdminHideMediaPage />} />
+            <Route path="/admin/reports" element={<AdminReportsPage />} />
+            <Route path="/admin/reports/:reportId/review" element={<AdminReviewReportPage />} />
+            <Route path="/admin/tags" element={<AdminTagsPage />} />
+            <Route path="/admin/tags/new" element={<AdminCreateTagPage />} />
+            <Route path="/admin/tags/:tagId/edit" element={<AdminEditTagPage />} />
+            <Route path="/admin/token-grants" element={<AdminTokenGrantsPage />} />
           </Route>
         </Route>
 

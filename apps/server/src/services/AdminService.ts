@@ -437,4 +437,43 @@ export class AdminService {
       },
     })
   }
+
+  // ── Creators (detail) ──────────────────────────────────────────────────────
+
+  async getCreator(creatorId: string) {
+    const creator = await db.creatorProfile.findUnique({
+      where: { id: creatorId },
+      include: {
+        user: true,
+        rooms: { orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, title: true, status: true, createdAt: true } },
+      },
+    })
+    if (!creator) throw httpError(404, 'Creator not found')
+    return creator
+  }
+
+  // ── Tags ──────────────────────────────────────────────────────────────────
+
+  async listTags() {
+    return db.roomTag.findMany({ orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }] })
+  }
+
+  async createTag(data: { slug: string; label: string; group?: string; sortOrder?: number }) {
+    const existing = await db.roomTag.findUnique({ where: { slug: data.slug } })
+    if (existing) throw httpError(409, 'Tag slug already exists')
+    return db.roomTag.create({ data: { slug: data.slug, label: data.label, group: data.group, sortOrder: data.sortOrder ?? 0 } })
+  }
+
+  async updateTag(tagId: string, data: { label?: string; group?: string; sortOrder?: number; isActive?: boolean }) {
+    const tag = await db.roomTag.findUnique({ where: { id: tagId } })
+    if (!tag) throw httpError(404, 'Tag not found')
+    return db.roomTag.update({ where: { id: tagId }, data })
+  }
+
+  async deleteTag(tagId: string) {
+    const tag = await db.roomTag.findUnique({ where: { id: tagId } })
+    if (!tag) throw httpError(404, 'Tag not found')
+    await db.roomTag.update({ where: { id: tagId }, data: { isActive: false } })
+    return { ok: true }
+  }
 }

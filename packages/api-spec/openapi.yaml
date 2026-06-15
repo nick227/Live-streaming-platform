@@ -289,6 +289,41 @@ components:
           type: string
           nullable: true
 
+    AdminTagDto:
+      type: object
+      required: [id, slug, label, sortOrder, isActive, createdAt]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        label: { type: string }
+        group:
+          type: string
+          nullable: true
+        sortOrder: { type: integer }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    CreateTagInput:
+      type: object
+      required: [slug, label]
+      properties:
+        slug: { type: string }
+        label: { type: string }
+        group:
+          type: string
+          nullable: true
+        sortOrder: { type: integer }
+
+    UpdateTagInput:
+      type: object
+      properties:
+        label: { type: string }
+        group:
+          type: string
+          nullable: true
+        sortOrder: { type: integer }
+        isActive: { type: boolean }
+
     RoomTaxonomy:
       type: object
       required: [categories, tags, countries, popularCountryCodes]
@@ -2722,6 +2757,33 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /admin/creators/{creatorId}:
+    get:
+      operationId: getAdminCreator
+      summary: Admin get creator detail
+      tags: [admin]
+      parameters:
+        - in: path
+          name: creatorId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Creator detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CreatorProfileDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /admin/creators/{creatorId}/approve:
     post:
       operationId: adminApproveCreator
@@ -3116,6 +3178,112 @@ paths:
                 required: [data]
                 properties:
                   data: { $ref: '#/components/schemas/ReportDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tags:
+    get:
+      operationId: listAdminTags
+      summary: Admin list all tags
+      tags: [admin]
+      responses:
+        '200':
+          description: Tags list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminTagDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createAdminTag
+      summary: Admin create a tag
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTagInput' }
+      responses:
+        '200':
+          description: Tag created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/AdminTagDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/tags/{tagId}:
+    patch:
+      operationId: updateAdminTag
+      summary: Admin update a tag
+      tags: [admin]
+      parameters:
+        - in: path
+          name: tagId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTagInput' }
+      responses:
+        '200':
+          description: Tag updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/AdminTagDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteAdminTag
+      summary: Admin delete (deactivate) a tag
+      tags: [admin]
+      parameters:
+        - in: path
+          name: tagId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tag deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [ok]
+                    properties:
+                      ok: { type: boolean }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
