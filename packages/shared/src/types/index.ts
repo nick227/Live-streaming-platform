@@ -47,6 +47,18 @@ export type PrivateSessionStatus =
   | 'CANCELLED'
   | 'EXPIRED'
   | 'FORCE_ENDED'
+export type ModerationActionType =
+  | 'MUTE'
+  | 'UNMUTE'
+  | 'KICK'
+  | 'BAN'
+  | 'UNBAN'
+  | 'DELETE_MESSAGE'
+  | 'PIN_MESSAGE'
+  | 'CLEAR_CHAT'
+  | 'SLOW_MODE'
+  | 'REWARD'
+export type CreatorRewardType = 'SHOUTOUT' | 'VIP' | 'UNVIP'
 
 // Socket.IO event types — shared between server and web app
 export interface ServerToClientEvents {
@@ -62,6 +74,16 @@ export interface ServerToClientEvents {
   'private:session_ended': (payload: { privateSession: PrivateSessionDto }) => void
   'wallet:update': (payload: { wallet: WalletSummary }) => void
   'room:ended': (payload: { roomId: string; reason?: string }) => void
+  'room:user_muted': (payload: { action: ModerationActionDto }) => void
+  'room:user_unmuted': (payload: { action: ModerationActionDto }) => void
+  'room:user_kicked': (payload: { action: ModerationActionDto }) => void
+  'room:user_banned': (payload: { ban: CreatorUserBanDto; action: ModerationActionDto }) => void
+  'room:user_unbanned': (payload: { action: ModerationActionDto }) => void
+  'room:user_rewarded': (payload: { reward: CreatorUserRewardDto; action: ModerationActionDto }) => void
+  'room:message_deleted': (payload: { message: ChatMessageDto; action: ModerationActionDto }) => void
+  'room:message_pinned': (payload: { settings: RoomChatSettingsDto; action: ModerationActionDto }) => void
+  'room:chat_settings_updated': (payload: { settings: RoomChatSettingsDto; action: ModerationActionDto }) => void
+  'room:removed': (payload: { roomId: string; reason?: string }) => void
 }
 
 export interface ClientToServerEvents {
@@ -96,7 +118,7 @@ export interface RoomGoalDto {
 export interface ChatMessageDto {
   id: string
   roomId: string
-  user?: { id: string; username: string; displayName?: string }
+  user?: { id: string; displayName: string }
   type: ChatMessageType
   body: string
   metadata?: Record<string, unknown>
@@ -135,6 +157,48 @@ export interface PrivateSessionDto {
   acceptedAt?: string
   startedAt?: string
   endedAt?: string
+}
+
+export interface ModerationActionDto {
+  id: string
+  roomId: string
+  creatorId: string
+  actorUserId: string
+  targetUserId?: string
+  targetMessageId?: string
+  type: ModerationActionType
+  reason?: string
+  durationSeconds?: number
+  expiresAt?: string
+  metadata?: Record<string, unknown>
+  createdAt: string
+}
+
+export interface CreatorUserBanDto {
+  id: string
+  creatorId: string
+  userId: string
+  createdById: string
+  reason?: string
+  expiresAt?: string
+  createdAt: string
+}
+
+export interface CreatorUserRewardDto {
+  id: string
+  creatorId: string
+  userId: string
+  createdById: string
+  type: CreatorRewardType
+  note?: string
+  expiresAt?: string
+  createdAt: string
+}
+
+export interface RoomChatSettingsDto {
+  roomId: string
+  slowModeSeconds: number
+  pinnedMessage?: ChatMessageDto
 }
 
 // VideoProvider abstraction — swappable (LiveKit Cloud default)

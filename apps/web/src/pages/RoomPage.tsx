@@ -35,11 +35,11 @@ function RoomInfoHeader({ room }: { room: any }) {
   const isLive = room.status === 'LIVE'
   return (
     <div className="flex items-start gap-3">
-      <Avatar src={room.creator?.avatarUrl} name={room.creator?.stageName ?? '?'} size="md" />
+      <Avatar src={room.creator?.avatarUrl} name={room.creator?.displayName ?? '?'} size="md" />
       <div className="flex-1 min-w-0">
         <h1 className="font-semibold text-lg line-clamp-1">{room.title}</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground">{room.creator?.stageName ?? 'Creator'}</span>
+          <span className="text-sm text-muted-foreground">{room.creator?.displayName ?? 'Creator'}</span>
           <StatusBadge status={room.status} />
         </div>
       </div>
@@ -68,7 +68,7 @@ function RoomChatPanel({ messages }: { messages: any[] }) {
           ) : (
             messages.map((m: any) => (
               <div key={m.id} className="flex gap-2 text-sm">
-                <span className="font-medium text-primary shrink-0">{m.user?.username ?? 'user'}:</span>
+                <span className="font-medium text-primary shrink-0">{m.user?.displayName ?? 'user'}:</span>
                 <span className="text-foreground break-words">{m.content}</span>
               </div>
             ))

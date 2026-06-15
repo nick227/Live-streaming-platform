@@ -10,7 +10,7 @@ interface RoomCardProps {
     status: string
     viewerCount?: number
     thumbnailUrl?: string | null
-    creator?: { stageName?: string; avatarUrl?: string | null } | null
+    creator?: { displayName?: string; avatarUrl?: string | null } | null
   }
 }
 
@@ -42,7 +42,7 @@ export function RoomCard({ room }: RoomCardProps) {
         <CardContent className="py-3 space-y-0.5">
           <p className="font-medium text-sm line-clamp-1">{room.title}</p>
           {room.creator && (
-            <p className="text-xs text-muted-foreground">{room.creator.stageName ?? 'Creator'}</p>
+            <p className="text-xs text-muted-foreground">{room.creator.displayName ?? 'Creator'}</p>
           )}
         </CardContent>
       </Card>

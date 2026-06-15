@@ -21,8 +21,7 @@ export function AdminUserPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">{user.username}</h1>
-          {user.displayName && <p className="text-sm text-muted-foreground">{user.displayName}</p>}
+          <h1 className="text-xl font-semibold">{user.displayName}</h1>
         </div>
         <div className="flex gap-2">
           <StatusBadge status={user.role} />
@@ -54,7 +53,7 @@ export function AdminUserPage() {
           <CardContent className="py-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Creator Profile</p>
             <div className="flex items-center justify-between">
-              <span className="font-medium">{creatorProfile.stageName}</span>
+              <span className="font-medium">{user.displayName}</span>
               <StatusBadge status={creatorProfile.status} />
             </div>
             <p className="text-sm text-muted-foreground mt-1">{creatorProfile.bio}</p>

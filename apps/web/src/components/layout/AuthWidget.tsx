@@ -23,8 +23,7 @@ export function AuthWidget() {
   }
 
   const profile = profileData?.data
-  const screenName =
-    profile?.stageName ?? me.user.displayName ?? me.user.username
+  const displayName = me.user.displayName
   const avatarSrc = resolveMediaUrl(profile?.avatarUrl)
 
   return (
@@ -32,9 +31,9 @@ export function AuthWidget() {
       to="/creator/profile"
       className="flex items-center gap-2 rounded-full pl-1 pr-3 py-1 hover:bg-accent transition-colors"
     >
-      <Avatar src={avatarSrc} name={screenName} size="sm" />
+      <Avatar src={avatarSrc} name={displayName} size="sm" />
       <span className="text-sm font-medium max-w-[8rem] truncate hidden sm:inline">
-        {screenName}
+        {displayName}
       </span>
     </Link>
   )

@@ -100,7 +100,6 @@ export class RoomService {
       creator = await db.creatorProfile.create({
         data: {
           userId: creatorUserId,
-          stageName: user.displayName ?? user.username,
           status: 'PENDING',
         }
       })
@@ -204,7 +203,6 @@ export class RoomService {
 export const CREATOR_INCLUDE = {
   select: {
     id: true,
-    stageName: true,
     userId: true,
     isLive: true,
     status: true,
@@ -212,6 +210,7 @@ export const CREATOR_INCLUDE = {
     minPrivateMinutes: true,
     privateViewerCamRequired: true,
     privateScreenShareAllowed: true,
+    user: { select: { displayName: true } },
   },
 }
 
@@ -235,10 +234,9 @@ export function formatRoom(room: any) {
       ? {
           id: room.creator.id,
           userId: room.creator.userId,
-          stageName: room.creator.stageName,
+          displayName: room.creator.user?.displayName ?? 'Creator',
           isLive: room.creator.isLive,
           status: room.creator.status,
-          username: '', // Username isn't actually required by CreatorSummary schema, but we can omit it by not including it in select and just dropping it if typescript complains. Actually, let's omit username.
         }
       : undefined,
     goal: room.goal

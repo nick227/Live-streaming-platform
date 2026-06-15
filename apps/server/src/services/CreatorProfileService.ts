@@ -1,8 +1,10 @@
 import { db } from '@streamyolo/db'
 
+const PROFILE_INCLUDE = { user: { select: { displayName: true } } }
+
 export class CreatorProfileService {
   async getByUserId(userId: string) {
-    const profile = await db.creatorProfile.findUnique({ where: { userId } })
+    const profile = await db.creatorProfile.findUnique({ where: { userId }, include: PROFILE_INCLUDE })
     if (!profile) throw { statusCode: 404, message: 'Creator profile not found' }
     return profile
   }
@@ -11,16 +13,15 @@ export class CreatorProfileService {
     const user = await db.user.findUnique({ where: { id: userId } })
     if (!user) throw { statusCode: 404, message: 'User not found' }
 
-    const existing = await db.creatorProfile.findUnique({ where: { userId } })
+    const existing = await db.creatorProfile.findUnique({ where: { userId }, include: PROFILE_INCLUDE })
     if (existing) return existing
 
-    // Apply to be a creator — creates DRAFT profile, admin must set ACTIVE
     const profile = await db.creatorProfile.create({
       data: {
         userId,
-        stageName: user.displayName ?? user.username,
         status: 'PENDING',
       },
+      include: PROFILE_INCLUDE,
     })
 
     await db.user.update({ where: { id: userId }, data: { role: 'CREATOR' } })
@@ -31,7 +32,6 @@ export class CreatorProfileService {
   async update(
     userId: string,
     data: {
-      stageName?: string
       bio?: string
       avatarMediaId?: string
       bannerMediaId?: string
@@ -49,7 +49,6 @@ export class CreatorProfileService {
     return db.creatorProfile.update({
       where: { userId },
       data: {
-        ...(data.stageName !== undefined ? { stageName: data.stageName } : {}),
         ...(data.bio !== undefined ? { bio: data.bio } : {}),
         ...(data.avatarMediaId !== undefined ? { avatarMediaId: data.avatarMediaId } : {}),
         ...(data.bannerMediaId !== undefined ? { bannerMediaId: data.bannerMediaId } : {}),
@@ -66,6 +65,7 @@ export class CreatorProfileService {
           : {}),
         ...(data.privateRulesText !== undefined ? { privateRulesText: data.privateRulesText } : {}),
       },
+      include: PROFILE_INCLUDE,
     })
   }
 }
@@ -78,7 +78,7 @@ export function formatCreatorProfile(profile: any) {
   return {
     id: profile.id,
     userId: profile.userId,
-    stageName: profile.stageName,
+    displayName: profile.user?.displayName ?? 'User',
     bio: profile.bio ?? null,
     avatarMediaId: profile.avatarMediaId ?? null,
     avatarUrl: mediaUrl(profile.avatarMediaId),

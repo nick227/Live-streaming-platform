@@ -9,16 +9,14 @@ import { toast } from 'sonner'
 const schema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  username: z.string().min(3).max(30),
-  displayName: z.string().min(1).max(50).optional().or(z.literal('')),
+  displayName: z.string().min(1).max(50),
 })
 type FormData = z.infer<typeof schema>
 
 const fields: FieldConfig[] = [
   { name: 'email', label: 'Email', type: 'email', voice: false, required: true },
   { name: 'password', label: 'Password', type: 'password', voice: false, required: true },
-  { name: 'username', label: 'Username', type: 'text', voice: false, required: true },
-  { name: 'displayName', label: 'Display Name', type: 'text', voice: false, required: false },
+  { name: 'displayName', label: 'Display Name', type: 'text', voice: false, required: true },
 ]
 
 export function RegisterPage() {
@@ -36,9 +34,14 @@ export function RegisterPage() {
         onSubmit={async (data) => {
           try {
             await mutation.mutateAsync(data)
-            navigate('/')
-          } catch {
-            toast.error('Registration failed — email or username may be taken')
+            navigate('/', { replace: true })
+          } catch (err: unknown) {
+            const status = (err as { status?: number })?.status
+            if (status === 409) {
+              toast.error('Email is already taken')
+            } else {
+              toast.error((err as { message?: string })?.message ?? 'Registration failed')
+            }
           }
         }}
         isLoading={mutation.isPending}

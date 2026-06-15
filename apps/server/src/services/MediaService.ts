@@ -111,7 +111,7 @@ export class MediaService {
     const updatedRoom = await db.room.update({
       where: { id: roomId },
       data: { thumbnailMediaId: asset.id },
-      include: { creator: { select: { id: true, stageName: true, userId: true } }, goal: true },
+      include: { creator: { select: { id: true, userId: true, user: { select: { displayName: true } } } }, goal: true },
     })
 
     return { media: asset, room: updatedRoom }

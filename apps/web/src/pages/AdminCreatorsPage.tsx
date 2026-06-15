@@ -20,7 +20,7 @@ export function AdminCreatorsPage() {
         <div key={creator.id} className="flex items-center justify-between py-3 gap-3">
           <div className="flex-1 min-w-0">
             <Link to={`/admin/creators/${creator.id}`} className="font-medium hover:underline truncate flex items-center gap-2">
-              {creator.stageName}
+              {creator.user?.displayName ?? 'Creator'}
               {creator.isLive && <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />}
             </Link>
             <p className="text-xs text-muted-foreground">{creator.userId?.slice(0, 8)}</p>

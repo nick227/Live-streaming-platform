@@ -34,9 +34,9 @@ export function AdminRoomPage() {
       <Card>
         <CardContent className="py-4 space-y-3">
           <div className="flex items-center gap-3">
-            <Avatar src={room.creator?.avatarUrl} name={room.creator?.stageName ?? '?'} size="sm" />
+            <Avatar src={room.creator?.avatarUrl} name={room.creator?.user?.displayName ?? '?'} size="sm" />
             <div>
-              <p className="text-sm font-medium">{room.creator?.stageName}</p>
+              <p className="text-sm font-medium">{room.creator?.user?.displayName}</p>
               <p className="text-xs text-muted-foreground">{room.visibility}</p>
             </div>
           </div>

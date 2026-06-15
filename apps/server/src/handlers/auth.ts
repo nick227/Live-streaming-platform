@@ -48,8 +48,6 @@ export async function getCurrentUser(request: any, reply: any) {
         ? {
             id: creatorProfile.id,
             userId: creatorProfile.userId,
-            stageName: creatorProfile.stageName,
-            bio: creatorProfile.bio ?? null,
             status: creatorProfile.status,
             isLive: creatorProfile.isLive,
           }
@@ -58,11 +56,15 @@ export async function getCurrentUser(request: any, reply: any) {
   })
 }
 
+export async function updateCurrentUser(request: any, reply: any) {
+  const user = await authService.updateCurrentUser(request.user.id, request.body ?? {})
+  return reply.send({ data: formatUser(user) })
+}
+
 function formatUser(user: any) {
   return {
     id: user.id,
-    username: user.username,
-    displayName: user.displayName ?? null,
+    displayName: user.displayName,
     role: user.role,
     status: user.status,
     createdAt: user.createdAt.toISOString(),

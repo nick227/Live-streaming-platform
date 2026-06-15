@@ -23,7 +23,7 @@ export function AdminRoomsPage() {
               {room.title}
             </Link>
             <p className="text-xs text-muted-foreground truncate">
-              {room.creator?.stageName} · {room.viewerCount ?? 0} viewers
+              {room.creator?.user?.displayName} · {room.viewerCount ?? 0} viewers
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0">

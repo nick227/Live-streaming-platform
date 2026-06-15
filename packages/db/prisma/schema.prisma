@@ -145,6 +145,25 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum ModerationActionType {
+  MUTE
+  UNMUTE
+  KICK
+  BAN
+  UNBAN
+  DELETE_MESSAGE
+  PIN_MESSAGE
+  CLEAR_CHAT
+  SLOW_MODE
+  REWARD
+}
+
+enum CreatorRewardType {
+  SHOUTOUT
+  VIP
+  UNVIP
+}
+
 // ─────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────
@@ -154,7 +173,7 @@ model User {
   email           String     @unique
   passwordHash    String
   username        String     @unique
-  displayName     String?
+  displayName     String
   role            UserRole   @default(VIEWER)
   status          UserStatus @default(ACTIVE)
   ageVerifiedAt   DateTime?
@@ -176,6 +195,12 @@ model User {
   adminActionsBy      AdminAction[]       @relation("AdminActionsBy")
   adminActionsTarget  AdminAction[]       @relation("AdminActionsTarget")
   reviewedReports     Report[]            @relation("ReportsReviewed")
+  moderationActionsBy     RoomModerationAction[] @relation("ModerationActionsBy")
+  moderationActionsTarget RoomModerationAction[] @relation("ModerationActionsTarget")
+  creatorBans             CreatorUserBan[]       @relation("CreatorBansTarget")
+  creatorBansCreated      CreatorUserBan[]       @relation("CreatorBansCreatedBy")
+  creatorRewards          CreatorUserReward[]    @relation("CreatorRewardsTarget")
+  creatorRewardsCreated   CreatorUserReward[]    @relation("CreatorRewardsCreatedBy")
 
   @@index([email])
   @@index([username])
@@ -240,7 +265,6 @@ model LedgerEntry {
 model CreatorProfile {
   id                        String        @id @default(cuid())
   userId                    String        @unique
-  stageName                 String
   bio                       String?       @db.Text
   avatarMediaId             String?
   logoMediaId               String?
@@ -264,6 +288,9 @@ model CreatorProfile {
   menuItems   CreatorMenuItem[]
   tipsTo      Tip[]             @relation("TipTo")
   privateSessions PrivateSession[] @relation("PrivateSessionCreator")
+  moderationActions RoomModerationAction[]
+  userBans          CreatorUserBan[]
+  userRewards       CreatorUserReward[]
 
   @@index([userId])
   @@index([status])
@@ -296,6 +323,8 @@ model Room {
   mediaAssets     MediaAsset[]     @relation("RoomMedia")
   adminActions    AdminAction[]    @relation("AdminActionsRoom")
   reports         Report[]         @relation("RoomReports")
+  chatSettings    RoomChatSettings?
+  moderationActions RoomModerationAction[]
 
   @@index([creatorId])
   @@index([status])
@@ -330,6 +359,8 @@ model ChatMessage {
   room    Room    @relation(fields: [roomId], references: [id])
   user    User?   @relation(fields: [userId], references: [id])
   reports Report[] @relation("MessageReports")
+  moderationActions RoomModerationAction[] @relation("ModerationActionsMessage")
+  pinnedInSettings  RoomChatSettings[]     @relation("PinnedMessage")
 
   @@index([roomId, createdAt])
   @@index([userId])
@@ -368,6 +399,82 @@ model RoomMenuItem {
   tips                  Tip[]
 
   @@index([roomId])
+}
+
+model RoomChatSettings {
+  id              String   @id @default(cuid())
+  roomId          String   @unique
+  slowModeSeconds Int      @default(0)
+  pinnedMessageId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  room          Room         @relation(fields: [roomId], references: [id])
+  pinnedMessage ChatMessage? @relation("PinnedMessage", fields: [pinnedMessageId], references: [id])
+}
+
+model CreatorUserBan {
+  id          String   @id @default(cuid())
+  creatorId   String
+  userId      String
+  createdById String
+  reason      String?  @db.Text
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  creator   CreatorProfile @relation(fields: [creatorId], references: [id])
+  user      User           @relation("CreatorBansTarget", fields: [userId], references: [id])
+  createdBy User           @relation("CreatorBansCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([creatorId, userId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model CreatorUserReward {
+  id          String            @id @default(cuid())
+  creatorId   String
+  userId      String
+  createdById String
+  type        CreatorRewardType
+  note        String?           @db.Text
+  expiresAt   DateTime?
+  createdAt   DateTime          @default(now())
+
+  creator   CreatorProfile @relation(fields: [creatorId], references: [id])
+  user      User           @relation("CreatorRewardsTarget", fields: [userId], references: [id])
+  createdBy User           @relation("CreatorRewardsCreatedBy", fields: [createdById], references: [id])
+
+  @@index([creatorId, userId])
+  @@index([userId])
+  @@index([type])
+}
+
+model RoomModerationAction {
+  id              String               @id @default(cuid())
+  roomId          String
+  creatorId       String
+  actorUserId     String
+  targetUserId    String?
+  targetMessageId String?
+  type            ModerationActionType
+  reason          String?              @db.Text
+  durationSeconds Int?
+  expiresAt       DateTime?
+  metadataJson    Json?
+  createdAt       DateTime             @default(now())
+
+  room          Room           @relation(fields: [roomId], references: [id])
+  creator       CreatorProfile @relation(fields: [creatorId], references: [id])
+  actor         User           @relation("ModerationActionsBy", fields: [actorUserId], references: [id])
+  targetUser    User?          @relation("ModerationActionsTarget", fields: [targetUserId], references: [id])
+  targetMessage ChatMessage?   @relation("ModerationActionsMessage", fields: [targetMessageId], references: [id])
+
+  @@index([roomId, createdAt])
+  @@index([creatorId, createdAt])
+  @@index([targetUserId])
+  @@index([type])
+  @@index([expiresAt])
 }
 
 model TokenPack {

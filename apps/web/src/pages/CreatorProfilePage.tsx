@@ -54,11 +54,11 @@ export function CreatorProfilePage() {
 
   const user = meData?.data?.user
   const profile = profileData?.data
-  const screenName = profile?.stageName ?? user?.displayName ?? user?.username ?? 'User'
+  const displayName = user?.displayName ?? profile?.displayName ?? 'User'
   const avatarSrc = resolveMediaUrl(profile?.avatarUrl)
 
   const formDefaults: ProfileFormData = {
-    stageName: profile?.stageName ?? user?.displayName ?? user?.username ?? '',
+    displayName: user?.displayName ?? '',
     bio: profile?.bio ?? '',
     privateRateTokensPerMinute: String(profile?.privateRateTokensPerMinute || 6),
     minPrivateMinutes: String(profile?.minPrivateMinutes || 1),
@@ -97,7 +97,7 @@ export function CreatorProfilePage() {
           className="relative group shrink-0"
           disabled={uploadMedia.isPending || updateProfile.isPending}
         >
-          <Avatar src={avatarSrc} name={screenName} size="xl" />
+          <Avatar src={avatarSrc} name={displayName} size="xl" />
           <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
             <Camera className="h-5 w-5 text-white" />
           </span>
@@ -115,13 +115,10 @@ export function CreatorProfilePage() {
         />
         <div className="flex-1 min-w-0 pt-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-3xl font-bold tracking-tight">{screenName}</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{displayName}</h1>
             {profile?.status && <StatusBadge status={profile.status} />}
             {profile?.isLive && <StatusBadge status="LIVE" />}
           </div>
-          {user?.username && (
-            <p className="text-muted-foreground mt-1">@{user.username}</p>
-          )}
         </div>
       </div>
 

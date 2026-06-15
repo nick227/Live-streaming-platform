@@ -59,7 +59,7 @@ export async function goLive(request: any, reply: any) {
   
   const token = new AccessToken(apiKey, apiSecret, {
     identity: request.user.id,
-    name: room.creator?.stageName ?? request.user.username ?? request.user.id,
+    name: room.creator?.user?.displayName ?? request.user.displayName ?? request.user.id,
   })
   
   token.addGrant({

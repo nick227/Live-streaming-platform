@@ -11,7 +11,7 @@ export async function getRoomMessages(request: any, reply: any) {
   const messages = await db.chatMessage.findMany({
     where: { roomId, deletedAt: null },
     include: {
-      user: { select: { id: true, username: true, displayName: true } },
+      user: { select: { id: true, displayName: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -22,7 +22,7 @@ export async function getRoomMessages(request: any, reply: any) {
       id: m.id,
       roomId: m.roomId,
       user: m.user
-        ? { id: m.user.id, username: m.user.username, displayName: m.user.displayName ?? undefined }
+        ? { id: m.user.id, displayName: m.user.displayName }
         : undefined,
       type: m.type,
       body: m.body,

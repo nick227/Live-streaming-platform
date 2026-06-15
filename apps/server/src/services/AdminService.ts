@@ -33,7 +33,7 @@ export class AdminService {
             }
           : {}),
       },
-      include: { creator: { select: { id: true, stageName: true, userId: true } } },
+      include: { creator: { select: { id: true, userId: true, user: { select: { displayName: true } } } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     })
@@ -51,7 +51,7 @@ export class AdminService {
   async getRoom(roomId: string) {
     const room = await db.room.findUnique({
       where: { id: roomId },
-      include: { creator: { select: { id: true, stageName: true, userId: true } }, goal: true },
+      include: { creator: { select: { id: true, userId: true, user: { select: { displayName: true } } } }, goal: true },
     })
     if (!room) throw { statusCode: 404, message: 'Room not found' }
     return room
@@ -93,7 +93,7 @@ export class AdminService {
       where: {
         ...(params.role ? { role: params.role as any } : {}),
         ...(params.q
-          ? { OR: [{ username: { contains: params.q, mode: 'insensitive' } }, { email: { contains: params.q, mode: 'insensitive' } }] }
+          ? { OR: [{ displayName: { contains: params.q } }, { email: { contains: params.q } }, { username: { contains: params.q } }] }
           : {}),
         ...(cursorPayload
           ? {
@@ -164,7 +164,7 @@ export class AdminService {
             }
           : {}),
       },
-      include: { user: { select: { id: true, username: true, email: true } } },
+      include: { user: { select: { id: true, displayName: true, email: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     })

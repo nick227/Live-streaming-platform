@@ -20,13 +20,13 @@ export function AdminUsersPage() {
       emptyTitle="No users found"
       emptyDescription="Try a different search."
       header={
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by username or email…" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or email…" />
       }
       renderItem={(user: any) => (
         <div key={user.id} className="flex items-center justify-between py-3 gap-3">
           <div className="flex-1 min-w-0">
             <Link to={`/admin/users/${user.id}`} className="font-medium hover:underline">
-              {user.username}
+              {user.displayName}
             </Link>
             <p className="text-xs text-muted-foreground">{user.role}</p>
           </div>

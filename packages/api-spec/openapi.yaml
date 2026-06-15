@@ -88,13 +88,10 @@ components:
 
     PublicUser:
       type: object
-      required: [id, username, role, status, createdAt]
+      required: [id, displayName, role, status, createdAt]
       properties:
         id: { type: string }
-        username: { type: string }
-        displayName:
-          type: string
-          nullable: true
+        displayName: { type: string }
         role:
           type: string
           enum: [VIEWER, CREATOR, ADMIN, MODERATOR]
@@ -155,15 +152,20 @@ components:
 
     RegisterInput:
       type: object
-      required: [email, password, username]
+      required: [email, password, displayName]
       properties:
         email: { type: string, format: email }
         password: { type: string, minLength: 8 }
-        username: { type: string, minLength: 3, maxLength: 30, pattern: '^[a-zA-Z0-9_]+$' }
         displayName: { type: string, minLength: 1, maxLength: 50 }
         role:
           type: string
           enum: [VIEWER, CREATOR]
+
+    UpdateCurrentUserInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 50 }
 
     LoginInput:
       type: object
@@ -196,12 +198,11 @@ components:
 
     CreatorSummary:
       type: object
-      required: [id, userId, stageName, isLive]
+      required: [id, userId, displayName, isLive]
       properties:
         id: { type: string }
         userId: { type: string }
-        username: { type: string }
-        stageName: { type: string }
+        displayName: { type: string }
         avatarUrl:
           type: string
           nullable: true
@@ -212,11 +213,10 @@ components:
 
     CreatorProfileSummary:
       type: object
-      required: [id, userId, stageName, status, isLive]
+      required: [id, userId, status, isLive]
       properties:
         id: { type: string }
         userId: { type: string }
-        stageName: { type: string }
         status:
           type: string
           enum: [DRAFT, PENDING, ACTIVE, PAUSED, SUSPENDED, BANNED]
@@ -225,11 +225,11 @@ components:
 
     CreatorProfileDetail:
       type: object
-      required: [id, userId, stageName, status, isLive, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, createdAt]
+      required: [id, userId, displayName, status, isLive, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, createdAt]
       properties:
         id: { type: string }
         userId: { type: string }
-        stageName: { type: string }
+        displayName: { type: string }
         bio:
           type: string
           nullable: true
@@ -263,7 +263,6 @@ components:
     UpdateCreatorProfileInput:
       type: object
       properties:
-        stageName: { type: string, minLength: 1, maxLength: 50 }
         bio: { type: string, maxLength: 1000 }
         avatarMediaId: { type: string }
         bannerMediaId: { type: string }
@@ -964,6 +963,29 @@ paths:
               schema: { $ref: '#/components/schemas/MeResponse' }
         '401':
           $ref: '#/components/responses/Unauthorized'
+    patch:
+      operationId: updateCurrentUser
+      summary: Update the current user's display name
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCurrentUserInput' }
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PublicUser' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   # ── Rooms (public) ──────────────────────────────────────────────────────────
 

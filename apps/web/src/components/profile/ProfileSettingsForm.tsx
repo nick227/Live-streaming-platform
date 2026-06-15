@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { useUpdateCreatorProfile } from '@streamyolo/sdk'
+import { useUpdateCreatorProfile, useUpdateCurrentUser } from '@streamyolo/sdk'
 import { Form } from '@/components/ui/Form'
 import type { FieldConfig } from '@/components/ui/Form'
 import { toast } from 'sonner'
@@ -20,7 +20,7 @@ const BOOL_OPTIONS = [
 ]
 
 const schema = z.object({
-  stageName: z.string().min(1).max(50),
+  displayName: z.string().min(1).max(50),
   bio: z.string().max(1000).optional().or(z.literal('')),
   privateRateTokensPerMinute: z.string().min(1),
   minPrivateMinutes: z.string().min(1),
@@ -31,7 +31,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 const fields: FieldConfig[] = [
-  { name: 'stageName', label: 'Screen Name', type: 'text', voice: false, required: true },
+  { name: 'displayName', label: 'Display Name', type: 'text', voice: false, required: true },
   { name: 'bio', label: 'Bio', type: 'textarea', voice: true, required: false, rows: 3 },
   { name: 'privateRateTokensPerMinute', label: 'Private Rate (tokens/min)', type: 'select', voice: false, required: true, options: RATE_OPTIONS },
   { name: 'minPrivateMinutes', label: 'Min Private Minutes', type: 'select', voice: false, required: true, options: MINUTE_OPTIONS },
@@ -45,7 +45,8 @@ type ProfileSettingsFormProps = {
 }
 
 export function ProfileSettingsForm({ defaults }: ProfileSettingsFormProps) {
-  const mutation = useUpdateCreatorProfile()
+  const updateUser = useUpdateCurrentUser()
+  const updateProfile = useUpdateCreatorProfile()
 
   return (
     <Form<FormData>
@@ -54,21 +55,23 @@ export function ProfileSettingsForm({ defaults }: ProfileSettingsFormProps) {
       defaultValues={defaults}
       onSubmit={async (formData) => {
         try {
-          await mutation.mutateAsync({
-            stageName: formData.stageName,
-            bio: formData.bio || undefined,
-            privateRateTokensPerMinute: Number(formData.privateRateTokensPerMinute),
-            minPrivateMinutes: Number(formData.minPrivateMinutes),
-            privateViewerCamRequired: formData.privateViewerCamRequired === 'true',
-            privateScreenShareAllowed: formData.privateScreenShareAllowed === 'true',
-            privateRulesText: formData.privateRulesText || undefined,
-          })
+          await Promise.all([
+            updateUser.mutateAsync({ displayName: formData.displayName }),
+            updateProfile.mutateAsync({
+              bio: formData.bio || undefined,
+              privateRateTokensPerMinute: Number(formData.privateRateTokensPerMinute),
+              minPrivateMinutes: Number(formData.minPrivateMinutes),
+              privateViewerCamRequired: formData.privateViewerCamRequired === 'true',
+              privateScreenShareAllowed: formData.privateScreenShareAllowed === 'true',
+              privateRulesText: formData.privateRulesText || undefined,
+            }),
+          ])
           toast.success('Profile saved')
         } catch {
           toast.error('Failed to save profile')
         }
       }}
-      isLoading={mutation.isPending}
+      isLoading={updateUser.isPending || updateProfile.isPending}
       submitLabel="Save Profile"
     />
   )

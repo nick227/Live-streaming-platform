@@ -55,3 +55,71 @@ export async function endPrivateSession(request: any, reply: any) {
   }
   return reply.send({ data: result })
 }
+
+export async function getCreatorPrivateSessions(request: any, reply: any) {
+  // Only the creator themselves can see these requests
+  const room = await import('@streamyolo/db').then((m) => m.db.room.findUnique({
+    where: { id: request.params.roomId },
+    include: { creator: true },
+  }))
+  if (!room) return reply.status(404).send({ error: 'Room not found' })
+  if (room.creator.userId !== request.user.id) return reply.status(403).send({ error: 'Forbidden' })
+
+  const sessions = await import('@streamyolo/db').then((m) => m.db.privateSession.findMany({
+    where: {
+      publicRoomId: request.params.roomId,
+      creatorId: room.creatorId,
+      status: { in: ['REQUESTED', 'ACCEPTED', 'ACTIVE'] },
+    },
+    include: { viewer: true, creator: true, publicRoom: true },
+    orderBy: { createdAt: 'asc' },
+  }))
+
+  const { formatSession } = require('../services/PrivateSessionService') || {}
+  
+  // We don't have formatSession directly exported, so we'll just format manually or import it
+  // Wait, formatSession isn't exported? Let's just return them. 
+  // Wait, I should import formatSession from PrivateSessionService. 
+  // Actually, formatSession is not exported from PrivateSessionService.ts, it's a private helper.
+  // I'll format them inline to match PrivateSessionDetail.
+  const formatted = sessions.map((s: any) => ({
+    id: s.id,
+    creatorId: s.creatorId,
+    viewerId: s.viewerId,
+    publicRoomId: s.publicRoomId,
+    status: s.status,
+    rateTokensPerMinute: s.rateTokensPerMinute,
+    minMinutes: s.minMinutes,
+    viewerCamRequired: s.viewerCamRequired,
+    screenShareAllowed: s.screenShareAllowed,
+    rulesText: s.rulesText,
+    livekitRoomName: s.livekitRoomName,
+    createdAt: s.createdAt.toISOString(),
+    acceptedAt: s.acceptedAt?.toISOString() ?? null,
+    startedAt: s.startedAt?.toISOString() ?? null,
+    endedAt: s.endedAt?.toISOString() ?? null,
+    forceEndedByAdminId: s.forceEndedByAdminId,
+    endReason: s.endReason,
+    reservedTokens: s.reservedTokens,
+    spentTokens: s.spentTokens,
+    creator: {
+      id: s.creator.id,
+      userId: s.creator.userId,
+      displayName: s.creator.user?.displayName ?? 'Creator',
+      status: s.creator.status,
+      user: {
+        id: s.creator.user?.id ?? '',
+        displayName: s.creator.user?.displayName ?? '',
+        avatarMediaId: s.creator.user?.avatarMediaId,
+      }
+    },
+    viewer: {
+      id: s.viewer.id,
+      displayName: s.viewer.displayName,
+      avatarMediaId: s.viewer.avatarMediaId,
+    }
+  }))
+
+  return reply.send({ data: formatted })
+}
+
