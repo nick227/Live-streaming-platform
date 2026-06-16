@@ -1,29 +1,86 @@
-import { useEffect, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ChatMessageRow } from './ChatMessageRow'
+import { cn } from '@/lib/utils'
+import { ChatScrollArea } from '../primitives/ChatScrollArea'
 import type { RoomEvent } from '../model/types'
+import { InlineModerationActions } from '../moderation/InlineModerationActions'
+import type { ModerationHandlers } from '../moderation/types'
+import { ChatMessageRow } from './ChatMessageRow'
 
-export function ChatMessageList({ messages }: { messages: RoomEvent[] }) {
-  const bottomRef = useRef<HTMLDivElement>(null)
+type ChatMessageListProps = {
+  messages: RoomEvent[]
+  variant?: 'viewer' | 'studio'
+  className?: string
+  emptyMessage?: string
+  moderation?: Required<Pick<ModerationHandlers, 'onUserAction' | 'onDeleteMessage' | 'onPinMessage'>>
+}
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, messages[messages.length - 1]?.message.id])
+function defaultEmptyMessage(variant: 'viewer' | 'studio') {
+  return variant === 'studio' ? 'No events yet…' : 'No messages yet. Say hello!'
+}
+
+export function ChatMessageList({
+  messages,
+  variant = 'viewer',
+  className,
+  emptyMessage,
+  moderation,
+}: ChatMessageListProps) {
+  const lastMessageId = messages[messages.length - 1]?.message.id
+  const scrollDeps = [messages.length, lastMessageId]
+
+  const content =
+    messages.length === 0 ? (
+      <div
+        className={cn(
+          'text-muted-foreground text-center',
+          variant === 'studio' ? 'text-sm italic py-4' : 'text-xs pt-8',
+        )}
+      >
+        {emptyMessage ?? defaultEmptyMessage(variant)}
+      </div>
+    ) : (
+      messages.map((event) => (
+        <ChatMessageRow
+          key={event.message.id}
+          event={event}
+          variant={variant}
+          showTimestamp={variant === 'viewer'}
+          moderationSlot={
+            variant === 'studio' && moderation ? (
+              <InlineModerationActions
+                userId={event.message.user?.id ?? undefined}
+                messageId={event.message.id}
+                onUserAction={moderation.onUserAction}
+                onDeleteMessage={moderation.onDeleteMessage}
+                onPinMessage={moderation.onPinMessage}
+              />
+            ) : undefined
+          }
+        />
+      ))
+    )
+
+  if (variant === 'viewer') {
+    return (
+      <Card className="flex-1 min-h-0 overflow-hidden">
+        <CardContent className="flex flex-col min-h-0 h-full p-0">
+          <ChatScrollArea
+            scrollDeps={scrollDeps}
+            className={cn('flex-1 overflow-y-auto px-3 py-3 space-y-2', className)}
+          >
+            {content}
+          </ChatScrollArea>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
-    <Card className="flex-1 min-h-0 overflow-hidden">
-      <CardContent
-        className="h-72 overflow-y-auto py-3 space-y-2"
-        aria-live="polite"
-        aria-relevant="additions"
-      >
-        {messages.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center pt-8">No messages yet. Say hello!</p>
-        ) : (
-          messages.map((event) => <ChatMessageRow key={event.message.id} event={event} showTimestamp />)
-        )}
-        <div ref={bottomRef} />
-      </CardContent>
-    </Card>
+    <ChatScrollArea
+      scrollDeps={scrollDeps}
+      className={cn('flex-1 overflow-y-auto p-3 space-y-1.5', className)}
+    >
+      {content}
+    </ChatScrollArea>
   )
 }
