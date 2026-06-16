@@ -39,6 +39,13 @@ async function main() {
   await server.register(swagger, { openapi: spec })
   await server.register(swaggerUi, { routePrefix: '/docs' })
 
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const fastifyStatic = require('@fastify/static')
+  await server.register(fastifyStatic, {
+    root: resolve(__dirname, '../../../uploads'),
+    prefix: '/uploads/',
+  })
+
   server.setErrorHandler((error, _request, reply) => {
     if (error.validation) {
       return reply.status(400).send({ error: 'Validation failed', details: error.validation })

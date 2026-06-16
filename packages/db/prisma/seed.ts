@@ -68,7 +68,7 @@ async function seedUsers(passwordHash: string) {
     admin: await db.user.upsert({
       where: { email: 'admin@dev.local' },
       update: {
-        username: 'admin',
+        username: 'sysadmin',
         displayName: 'Admin',
         passwordHash,
         role: 'ADMIN',
@@ -78,7 +78,7 @@ async function seedUsers(passwordHash: string) {
       },
       create: {
         email: 'admin@dev.local',
-        username: 'admin',
+        username: 'sysadmin',
         displayName: 'Admin',
         passwordHash,
         role: 'ADMIN',

@@ -36,15 +36,22 @@ describe('listRooms', () => {
   it('filters by category and country', async () => {
     await seedBrowseTags()
     const creator = await createActiveCreator(testOtherUserId)
+    const media = await db.mediaAsset.create({
+      data: {
+        owner: { connect: { id: creator.userId } },
+        type: 'ROOM_THUMBNAIL_CAPTURE',
+        url: 'http://example.com/thumb.jpg',
+        status: 'APPROVED'
+      }
+    })
     await db.room.create({
       data: {
         creatorId: creator.id,
         title: 'Filtered Room',
-        slug: `filtered-room-${Date.now()}`,
         livekitRoomName: `lk-filtered-${Date.now()}`,
         status: 'LIVE',
         visibility: 'PUBLIC',
-        thumbnailMediaId: 'dummy-media',
+        thumbnailMediaId: media.id,
         category: 'FEMALE',
         countryCode: 'US',
       },
@@ -64,15 +71,22 @@ describe('listRooms', () => {
     await seedBrowseTags()
     const tag = await db.roomTag.findUniqueOrThrow({ where: { slug: 'gaming' } })
     const creator = await createActiveCreator(testOtherUserId)
+    const media = await db.mediaAsset.create({
+      data: {
+        owner: { connect: { id: creator.userId } },
+        type: 'ROOM_THUMBNAIL_CAPTURE',
+        url: 'http://example.com/thumb.jpg',
+        status: 'APPROVED'
+      }
+    })
     const room = await db.room.create({
       data: {
         creatorId: creator.id,
         title: 'Tagged Room',
-        slug: `tagged-room-${Date.now()}`,
         livekitRoomName: `lk-tagged-${Date.now()}`,
         status: 'LIVE',
         visibility: 'PUBLIC',
-        thumbnailMediaId: 'dummy-media',
+        thumbnailMediaId: media.id,
         category: 'COUPLES',
         countryCode: 'GB',
         tags: { create: [{ tagId: tag.id }] },
@@ -89,16 +103,18 @@ describe('listRooms', () => {
   })
 })
 
-describe('getRoom', () => {
-  it('GET /rooms/{slug}', async () => {
+describe('getUserChannel', () => {
+  it('GET /users/{username}', async () => {
     await createActiveCreator(testOtherUserId)
     const room = await createLiveRoom(testOtherUserId)
+    const user = await db.user.findUnique({ where: { id: testOtherUserId } })
 
     const res = await app.inject({
       method: 'GET',
-      url: `/rooms/${room.slug}`,
+      url: `/users/${user!.username}`,
     })
+    console.log(res.body)
     expect(res.statusCode).toBe(200)
-    await validateResponse('getRoom', 200, res.json())
+    await validateResponse('getUserChannel', 200, res.json())
   })
 })

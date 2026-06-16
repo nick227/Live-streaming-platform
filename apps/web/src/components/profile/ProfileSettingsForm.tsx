@@ -21,6 +21,7 @@ const BOOL_OPTIONS = [
 
 const schema = z.object({
   displayName: z.string().min(1).max(50),
+  username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, hyphens, and underscores allowed').optional(),
   bio: z.string().max(1000).optional().or(z.literal('')),
   privateRateTokensPerMinute: z.string().min(1),
   minPrivateMinutes: z.string().min(1),
@@ -32,6 +33,7 @@ type FormData = z.infer<typeof schema>
 
 const fields: FieldConfig[] = [
   { name: 'displayName', label: 'Display Name', type: 'text', voice: false, required: true },
+  { name: 'username', label: 'Username (Custom URL)', type: 'text', voice: false, required: false },
   { name: 'bio', label: 'Bio', type: 'textarea', voice: true, required: false, rows: 3 },
   { name: 'privateRateTokensPerMinute', label: 'Private Rate (tokens/min)', type: 'select', voice: false, required: true, options: RATE_OPTIONS },
   { name: 'minPrivateMinutes', label: 'Min Private Minutes', type: 'select', voice: false, required: true, options: MINUTE_OPTIONS },
@@ -56,7 +58,7 @@ export function ProfileSettingsForm({ defaults }: ProfileSettingsFormProps) {
       onSubmit={async (formData) => {
         try {
           await Promise.all([
-            updateUser.mutateAsync({ displayName: formData.displayName }),
+            updateUser.mutateAsync({ displayName: formData.displayName, username: formData.username || undefined }),
             updateProfile.mutateAsync({
               bio: formData.bio || undefined,
               privateRateTokensPerMinute: Number(formData.privateRateTokensPerMinute),

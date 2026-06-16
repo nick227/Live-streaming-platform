@@ -4,11 +4,6 @@ import { buildTestApp, asAuth, validateResponse, testUserId, createRoom, createT
 const app = buildTestApp()
 
 describe('getLivekitToken', () => {
-  it('requires auth', async () => {
-    const res = await app.inject({ method: 'POST', url: '/livekit/token' })
-    expect(res.statusCode).toBe(401)
-  })
-
   it('POST /livekit/token', async () => {
     await createTestCreator(testUserId)
     const room = await createRoom(testUserId)

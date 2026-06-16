@@ -35,23 +35,12 @@ export async function listCreatorRooms(request: { user: { id: string }; query?: 
   return reply.send({ data: result.rooms, meta: result.meta })
 }
 
-export async function getRoom(request: { params: { slug: string } }, reply: { send: (body: unknown) => unknown }) {
-  const room = await roomService.getByIdOrSlug(request.params.slug)
-  const formattedRoom = formatRoom(room)
-  const vipUserIds = await moderationService.getActiveVipUserIds(room.creatorId)
-  return reply.send({
-    data: {
-      room: formattedRoom,
-      vipUserIds,
-      viewerState: {
-        canChat: true,
-        canTip: true,
-        canRequestPrivate: formattedRoom.privateAvailable,
-        hasActivePrivateSession: false,
-      },
-    },
-  })
+export async function getRoom(request: { params: { roomId: string } }, reply: { send: (body: unknown) => unknown }) {
+  const room = await roomService.getById(request.params.roomId)
+  return reply.send({ data: { room: formatRoom(room), vipUserIds: [] } })
 }
+
+
 
 export async function prepareRoom(request: { user: { id: string }; body: Record<string, unknown> }, reply: { status: (code: number) => { send: (body: unknown) => unknown } }) {
   const room = await roomService.prepare(request.user.id, request.body as Parameters<RoomService['prepare']>[1])
@@ -72,7 +61,7 @@ export async function updateCreatorRoom(request: { user: { id: string }; params:
   return reply.send({ data: { room: formatRoom(room) } })
 }
 
-export async function goLive(request: { user: { id: string }; params: { roomId: string } }, reply: { send: (body: unknown) => unknown }) {
+export async function goLive(request: { user: { id: string }; params: { roomId: string }; server: { io?: { to: (room: string) => { emit: (event: string, payload: unknown) => void } } } }, reply: { send: (body: unknown) => unknown }) {
   const room = await roomService.goLive(request.user.id, request.params.roomId)
 
   try {
@@ -85,6 +74,11 @@ export async function goLive(request: { user: { id: string }; params: { roomId: 
     appRoomType: 'PUBLIC_ROOM',
     appRoomId: room.id,
   })
+
+  const io = request.server.io
+  if (io) {
+    io.to(`room:${room.id}`).emit('room:started', { roomId: room.id })
+  }
 
   return reply.send({ data: { room: formatRoom(room), livekitToken, livekitUrl } })
 }

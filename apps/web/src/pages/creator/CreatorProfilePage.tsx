@@ -59,6 +59,7 @@ export function CreatorProfilePage() {
 
   const formDefaults: ProfileFormData = {
     displayName: user?.displayName ?? '',
+    username: user?.username ?? '',
     bio: profile?.bio ?? '',
     privateRateTokensPerMinute: String(profile?.privateRateTokensPerMinute || 6),
     minPrivateMinutes: String(profile?.minPrivateMinutes || 1),
@@ -119,6 +120,18 @@ export function CreatorProfilePage() {
             {profile?.status && <StatusBadge status={profile.status} />}
             {profile?.isLive && <StatusBadge status="LIVE" />}
           </div>
+          {user?.username && (
+            <div className="mt-1">
+              <a 
+                href={`/${user.username}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                {window.location.origin}/{user.username}
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
@@ -140,61 +153,6 @@ export function CreatorProfilePage() {
         <ProfileStreamHistory />
       </section>
 
-      {/* Actions */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Account</h2>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/creator/rooms">
-              <Radio className="h-4 w-4 mr-1.5" />
-              My Rooms
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/creator/rooms/prepare">
-              <Radio className="h-4 w-4 mr-1.5" />
-              New Room
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/creator/menu-items">
-              <List className="h-4 w-4 mr-1.5" />
-              Tip Menu
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/creator/earnings">
-              <Coins className="h-4 w-4 mr-1.5" />
-              Earnings
-            </Link>
-          </Button>
-          {profile?.currentRoomId && (
-            <Button asChild variant="outline" size="sm">
-              <Link to={`/creator/rooms/${profile.currentRoomId}/moderation`}>
-                <Shield className="h-4 w-4 mr-1.5" />
-                Streamer Controls
-              </Link>
-            </Button>
-          )}
-          {user?.role === 'ADMIN' && (
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/overview">
-                <ShieldCheck className="h-4 w-4 mr-1.5" />
-                Admin
-              </Link>
-            </Button>
-          )}
-          <Button type="button" variant="outline" size="sm" onClick={toggleTheme}>
-            <Sun className="h-4 w-4 mr-1.5 dark:hidden" />
-            <Moon className="h-4 w-4 mr-1.5 hidden dark:block" />
-            Toggle Theme
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={handleLogout} loading={logout.isPending}>
-            <LogOut className="h-4 w-4 mr-1.5" />
-            Log Out
-          </Button>
-        </div>
-      </section>
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { LiveKitRoom, VideoTrack, useTracks, AudioTrack, useLocalParticipant } f
 import { Track } from 'livekit-client'
 import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
-import { Loader2, PhoneOff } from 'lucide-react'
+import { Loader2, MonitorUp, PhoneOff } from 'lucide-react'
 
 type PrivateSessionDto = components['schemas']['PrivateSessionDto']
 
@@ -37,12 +37,12 @@ function CountdownTimer({ hardEndAt }: { hardEndAt: string }) {
   )
 }
 
-function PublishedTracks({ isViewerCamRequired }: { isViewerCamRequired: boolean }) {
-  const tracks = useTracks([Track.Source.Camera, Track.Source.Microphone])
+function PublishedTracks() {
+  const tracks = useTracks([Track.Source.Camera, Track.Source.Microphone, Track.Source.ScreenShare])
   const { localParticipant } = useLocalParticipant()
 
   // Find remote tracks
-  const remoteVideoTracks = tracks.filter((t) => t.source === Track.Source.Camera && t.participant.identity !== localParticipant.identity)
+  const remoteVideoTracks = tracks.filter((t) => (t.source === Track.Source.Camera || t.source === Track.Source.ScreenShare) && t.participant.identity !== localParticipant.identity)
   const remoteAudioTracks = tracks.filter((t) => t.source === Track.Source.Microphone && t.participant.identity !== localParticipant.identity)
 
   // Find local tracks
@@ -71,6 +71,29 @@ function PublishedTracks({ isViewerCamRequired }: { isViewerCamRequired: boolean
   )
 }
 
+function ScreenShareButton({ allowed }: { allowed: boolean }) {
+  const { localParticipant } = useLocalParticipant()
+  const [sharing, setSharing] = useState(false)
+
+  if (!allowed) return null
+
+  return (
+    <Button
+      variant="outline"
+      size="lg"
+      onClick={async () => {
+        const next = !sharing
+        await localParticipant.setScreenShareEnabled(next)
+        setSharing(next)
+      }}
+      className="pointer-events-auto rounded-full gap-2 font-bold shadow-xl"
+    >
+      <MonitorUp className="h-5 w-5" />
+      {sharing ? 'Stop Share' : 'Share Screen'}
+    </Button>
+  )
+}
+
 export function ActivePrivateSessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
@@ -86,7 +109,7 @@ export function ActivePrivateSessionPage() {
   const returnUrl = session?.publicRoomId
     ? (currentUser?.id === session.viewerId 
         ? `/rooms/${session.publicRoomId}` 
-        : `/creator/rooms/${session.publicRoomId}/go-live`)
+        : '/studio')
     : '/'
 
   useEffect(() => {
@@ -137,7 +160,10 @@ export function ActivePrivateSessionPage() {
         }}
         className="w-full h-full"
       >
-        <PublishedTracks isViewerCamRequired={session.viewerCamRequired} />
+        <PublishedTracks />
+        <div className="absolute bottom-6 left-6 pointer-events-none">
+          <ScreenShareButton allowed={session.screenShareAllowed} />
+        </div>
       </LiveKitRoom>
 
       {/* Top overlay controls */}

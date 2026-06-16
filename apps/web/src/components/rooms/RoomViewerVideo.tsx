@@ -22,10 +22,14 @@ function RemoteCamera() {
 export function RoomViewerVideo({
   roomId,
   isLive,
+  isReconnecting,
+  activePrivateSessionId,
   fallback,
 }: {
   roomId: string
   isLive: boolean
+  isReconnecting?: boolean
+  activePrivateSessionId?: string | null
   fallback: React.ReactNode
 }) {
   const { mutateAsync: fetchToken, isPending } = useGetLivekitToken()
@@ -56,21 +60,48 @@ export function RoomViewerVideo({
     }
   }, [roomId, isLive, fetchToken])
 
-  if (!isLive || failed) return <>{fallback}</>
-  if (isPending && !credentials) {
-    return <Skeleton className="aspect-video w-full rounded-lg" />
+  if (activePrivateSessionId) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-black text-center text-sm font-medium text-white">
+        Creator is in a private session
+      </div>
+    )
   }
-  if (!credentials) return <>{fallback}</>
+  
+  if (!isLive) {
+    return <>{fallback}</>
+  }
+
+  if (isPending) {
+    return <Skeleton className="w-full h-full" />
+  }
+
+  if (failed || !credentials) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted text-muted-foreground">
+        <p className="text-sm">Failed to connect to stream</p>
+      </div>
+    )
+  }
 
   return (
-    <LiveKitRoom
-      video={false}
-      audio={true}
-      token={credentials.token}
-      serverUrl={credentials.url}
-      className="relative aspect-video bg-black rounded-lg overflow-hidden"
-    >
-      <RemoteCamera />
-    </LiveKitRoom>
+    <div className="relative w-full h-full">
+      <LiveKitRoom
+        video={false}
+        audio={true}
+        token={credentials.token}
+        serverUrl={credentials.url}
+        className="w-full h-full bg-black"
+      >
+        <RemoteCamera />
+      </LiveKitRoom>
+      {isReconnecting && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm text-white p-4 text-center animate-in fade-in">
+          <div className="h-6 w-6 mb-3 rounded-full border-2 border-t-white border-white/20 animate-spin" />
+          <p className="font-semibold mb-1">Creator connection interrupted</p>
+          <p className="text-sm text-white/70">Trying to reconnect...</p>
+        </div>
+      )}
+    </div>
   )
 }

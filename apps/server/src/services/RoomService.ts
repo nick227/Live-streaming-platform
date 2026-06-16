@@ -29,18 +29,34 @@ export const CREATOR_INCLUDE = {
     userId: true,
     isLive: true,
     status: true,
+    avatarMediaId: true,
     privateRateTokensPerMinute: true,
     minPrivateMinutes: true,
     privateViewerCamRequired: true,
     privateScreenShareAllowed: true,
-    user: { select: { displayName: true } },
+    user: {
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+      },
+    },
   },
 }
 
-const ROOM_INCLUDES = {
+export const ROOM_INCLUDES = {
   creator: CREATOR_INCLUDE,
   goal: true,
   tags: { include: { tag: true } },
+  privateSessions: {
+    where: { status: 'ACTIVE' as const },
+    select: { id: true },
+    orderBy: { startedAt: 'desc' as const },
+    take: 1,
+  },
 } as const
 
 export type PrepareRoomData = {
@@ -159,9 +175,9 @@ export class RoomService {
     return this._paginateRooms(rooms, limit)
   }
 
-  async getByIdOrSlug(idOrSlug: string) {
+  async getById(id: string) {
     const room = await db.room.findFirst({
-      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      where: { id },
       include: {
         ...ROOM_INCLUDES,
         menuItems: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } },
@@ -195,7 +211,6 @@ export class RoomService {
 
     const tagIds = await this._resolveActiveTagIds(tagSlugs)
 
-    const slug = data.slug ?? `${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${nanoid(6)}`
     const livekitRoomName = `room-${nanoid(16)}`
 
     const room = await db.$transaction(async (tx) => {
@@ -203,7 +218,6 @@ export class RoomService {
         data: {
           creatorId: creator.id,
           title: data.title,
-          slug,
           livekitRoomName,
           visibility: (data.visibility as 'PUBLIC' | 'UNLISTED' | undefined) ?? 'PUBLIC',
           thumbnailMediaId: data.thumbnailMediaId,
@@ -239,29 +253,68 @@ export class RoomService {
     return room
   }
 
+  async update(creatorUserId: string, roomId: string, data: Partial<PrepareRoomData>) {
+    const existing = await this._assertCreatorOwnsRoom(creatorUserId, roomId)
+    if (existing.status !== 'DRAFT' && existing.status !== 'LIVE') {
+      throw httpError(400, 'Cannot update a room that has ended')
+    }
+
+    const updateData: any = {}
+    if (data.title !== undefined) updateData.title = data.title
+    if (data.visibility !== undefined) updateData.visibility = data.visibility
+    if (data.thumbnailMediaId !== undefined) updateData.thumbnailMediaId = data.thumbnailMediaId
+    if (data.coverMediaId !== undefined) updateData.coverMediaId = data.coverMediaId
+    if (data.category !== undefined) {
+      updateData.category = this._resolveCategory(data.category, existing.category)
+    }
+    if (data.countryCode !== undefined) {
+      updateData.countryCode = this._resolveCountryCode(data.countryCode, existing.countryCode)
+    }
+
+    const room = await db.$transaction(async (tx) => {
+      if (data.tagSlugs !== undefined) {
+        const tagIds = await this._resolveActiveTagIds(data.tagSlugs)
+        await tx.roomTagAssignment.deleteMany({ where: { roomId } })
+        if (tagIds.length > 0) {
+          await tx.roomTagAssignment.createMany({
+            data: tagIds.map((tagId) => ({ roomId, tagId })),
+          })
+        }
+      }
+
+      return tx.room.update({
+        where: { id: roomId },
+        data: updateData,
+        include: ROOM_INCLUDES,
+      })
+    })
+
+    return room
+  }
+
   async goLive(creatorUserId: string, roomId: string) {
     const room = await this._assertCreatorOwnsRoom(creatorUserId, roomId)
-
-    const creator = await db.creatorProfile.findUnique({ where: { id: room.creatorId } })
-    if (creator?.isLive && creator.currentRoomId !== roomId) {
-      throw httpError(400, 'You are already live in another room')
-    }
 
     const missing = await this._goLiveEligibility(room)
     if (missing.length > 0) throw httpError(422, `Missing: ${missing.join(', ')}`)
 
-    const updated = await db.room.update({
-      where: { id: roomId },
-      data: { status: 'LIVE', startedAt: new Date() },
-      include: ROOM_INCLUDES,
+    await db.$transaction(async (tx) => {
+      // Atomic claim: UPDATE ... WHERE isLive = false ensures only one concurrent goLive wins
+      const claim = await tx.creatorProfile.updateMany({
+        where: { id: room.creatorId, isLive: false },
+        data: { isLive: true, currentRoomId: roomId },
+      })
+      if (claim.count === 0) {
+        throw httpError(400, 'You are already live in another room')
+      }
+
+      await tx.room.update({
+        where: { id: roomId },
+        data: { status: 'LIVE', startedAt: new Date(), endedAt: null },
+      })
     })
 
-    await db.creatorProfile.update({
-      where: { id: room.creatorId },
-      data: { isLive: true, currentRoomId: roomId },
-    })
-
-    return updated
+    return db.room.findUniqueOrThrow({ where: { id: roomId }, include: ROOM_INCLUDES })
   }
 
   async endRoom(creatorUserId: string, roomId: string) {
@@ -367,19 +420,13 @@ export class RoomService {
     const creator = await db.creatorProfile.findUnique({ where: { id: room.creatorId } })
     if (!creator) return ['CREATOR_PROFILE_MISSING']
 
+    if (creator.status !== 'ACTIVE') missing.push('CREATOR_NOT_APPROVED')
     if (!room.thumbnailMediaId) missing.push('ROOM_THUMBNAIL')
     if (!room.title?.trim()) missing.push('ROOM_TITLE')
     if (!room.category) missing.push('ROOM_CATEGORY')
     if (!room.countryCode) missing.push('ROOM_COUNTRY')
-    if (!creator.privateRulesText?.trim()) missing.push('PRIVATE_RULES_TEXT')
-    if (!creator.privateRateTokensPerMinute || creator.privateRateTokensPerMinute <= 0) {
-      missing.push('PRIVATE_RATE')
-    }
 
-    const menuCount = await db.creatorMenuItem.count({
-      where: { creatorId: creator.id, isActive: true },
-    })
-    if (menuCount === 0) missing.push('TIP_MENU')
+
 
     return missing
   }
@@ -402,7 +449,7 @@ type RoomTagAssignment = {
 
 type FormattableRoom = {
   id: string
-  slug: string
+  slug?: string
   title: string
   status: string
   visibility: string
@@ -417,11 +464,19 @@ type FormattableRoom = {
     userId?: string
     isLive?: boolean
     status?: string
+    avatarMediaId?: string | null
     privateRateTokensPerMinute?: number
     minPrivateMinutes?: number
     privateViewerCamRequired?: boolean
     privateScreenShareAllowed?: boolean
-    user?: { displayName: string | null } | null
+    user?: {
+      id?: string
+      username?: string | null
+      displayName: string | null
+      role?: string
+      status?: string
+      createdAt?: Date
+    } | null
   } | null
   goal?: {
     id: string
@@ -430,12 +485,12 @@ type FormattableRoom = {
     currentTokens: number
   } | null
   tags?: RoomTagAssignment[]
+  privateSessions?: { id: string }[]
 }
 
 export function formatRoom(room: FormattableRoom) {
   return {
     id: room.id,
-    slug: room.slug,
     title: room.title,
     status: room.status,
     visibility: room.visibility,
@@ -449,6 +504,7 @@ export function formatRoom(room: FormattableRoom) {
     })),
     thumbnailUrl: room.thumbnailMediaId ? `/media/${room.thumbnailMediaId}` : null,
     viewerCount: room.viewerCount,
+    activePrivateSessionId: room.privateSessions?.[0]?.id ?? null,
     privateAvailable: (room.creator?.privateRateTokensPerMinute ?? 0) > 0,
     privateRateTokensPerMinute: room.creator?.privateRateTokensPerMinute ?? null,
     minPrivateMinutes: room.creator?.minPrivateMinutes ?? 1,
@@ -461,6 +517,15 @@ export function formatRoom(room: FormattableRoom) {
           id: room.creator.id,
           userId: room.creator.userId,
           displayName: room.creator.user?.displayName ?? 'Creator',
+          avatarUrl: room.creator.avatarMediaId ? `/media/${room.creator.avatarMediaId}` : null,
+          user: {
+            id: room.creator.user?.id ?? room.creator.userId,
+            username: room.creator.user?.username ?? 'unknown',
+            displayName: room.creator.user?.displayName ?? 'Creator',
+            role: room.creator.user?.role ?? 'VIEWER',
+            status: room.creator.user?.status ?? 'ACTIVE',
+            createdAt: room.creator.user?.createdAt?.toISOString() ?? new Date().toISOString(),
+          },
           isLive: room.creator.isLive,
           status: room.creator.status,
         }

@@ -63,3 +63,17 @@ export async function captureRoomThumbnail(request: any, reply: any) {
 
   return reply.send({ data: { media: formatMedia(media), room: formatRoom(room) } })
 }
+
+export async function getMedia(request: any, reply: any) {
+  const { db } = require('@streamyolo/db')
+  const asset = await db.mediaAsset.findUnique({
+    where: { id: request.params.mediaId }
+  })
+  
+  if (!asset) {
+    throw httpError(404, 'Media not found')
+  }
+
+  // Redirect to the actual stored URL
+  return reply.redirect(302, asset.url)
+}

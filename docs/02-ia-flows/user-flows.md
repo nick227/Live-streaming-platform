@@ -71,7 +71,7 @@ Viewer in public room
   → Creator accepts
   → Backend creates token hold
   → PrivateSession ACCEPTED
-  → Backend creates LiveKit private room
+  → Backend creates isolated LiveKit Private Session media space
   → Viewer and creator navigate/join
   → Session ACTIVE
   → Timer captures tokens periodically

@@ -31,16 +31,24 @@ async function seedLiveRoom() {
       privateRulesText: 'Be kind.',
     },
   })
+  const media = await db.mediaAsset.create({
+    data: {
+      owner: { connect: { id: testUserId } },
+      type: 'ROOM_THUMBNAIL_CAPTURE',
+      url: 'http://example.com/thumb.jpg',
+      status: 'APPROVED'
+    }
+  })
+
   await db.room.create({
     data: {
       id: roomId,
       creatorId,
-      title: 'Moderation Room',
-      slug: 'moderation-room',
+      title: 'Moderation Test Room',
       status: 'LIVE',
       visibility: 'PUBLIC',
       livekitRoomName: 'lk-moderation-room',
-      thumbnailMediaId: 'thumb-1',
+      thumbnailMediaId: media.id,
     },
   })
 }

@@ -111,8 +111,7 @@ async function seedPrivateSession(input: { reservedTokens: number; status: 'REQU
   const room = await db.room.create({
     data: {
       creatorId: creator.id,
-      title: 'Test Room',
-      slug: `test-room-${input.status.toLowerCase()}`,
+      title: `Test Room ${input.status}`,
       status: 'LIVE',
       livekitRoomName: `test-room-${input.status.toLowerCase()}`,
     },

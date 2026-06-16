@@ -72,8 +72,13 @@ export interface ServerToClientEvents {
   'private:request_declined': (payload: { privateSession: PrivateSessionDto }) => void
   'private:session_started': (payload: { privateSession: PrivateSessionDto }) => void
   'private:session_ended': (payload: { privateSession: PrivateSessionDto }) => void
+  'room:active_private_started': (payload: { roomId: string; activePrivateSessionId: string }) => void
+  'room:active_private_ended': (payload: { roomId: string; activePrivateSessionId: string }) => void
+  'room:started': (payload: { roomId: string }) => void
   'wallet:update': (payload: { wallet: WalletSummary }) => void
   'room:ended': (payload: { roomId: string; reason?: string }) => void
+  'room:reconnecting': (payload: { roomId: string }) => void
+  'room:reconnected': (payload: { roomId: string }) => void
   'room:user_muted': (payload: { action: ModerationActionDto }) => void
   'room:user_unmuted': (payload: { action: ModerationActionDto }) => void
   'room:user_kicked': (payload: { action: ModerationActionDto }) => void

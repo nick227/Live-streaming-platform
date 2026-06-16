@@ -52,23 +52,48 @@ function formatAdminUserDetail(u: any) {
 }
 
 function formatCreatorProfileDetail(c: any) {
-  return {
+  const base: any = {
     id: c.id,
     userId: c.userId,
-    displayName: c.user?.displayName ?? 'Unknown',
+    username: c.user?.username ?? null,
+    displayName: c.user?.displayName ?? c.displayName ?? 'Unknown',
     bio: c.bio ?? null,
-    avatarUrl: c.user?.avatarUrl ?? null,
-    logoUrl: null, // Add if needed
-    bannerUrl: null, // Add if needed
+    avatarUrl: c.avatarMediaId ? `/media/${c.avatarMediaId}` : null,
+    logoUrl: c.logoMediaId ? `/media/${c.logoMediaId}` : null,
+    bannerUrl: c.bannerMediaId ? `/media/${c.bannerMediaId}` : null,
     status: c.status,
-    isLive: false, // Or compute if needed
-    currentRoomId: null, // Or compute if needed
+    isLive: c.isLive ?? false,
+    currentRoomId: c.currentRoomId ?? null,
+    defaultRoomCategory: c.defaultRoomCategory ?? null,
+    defaultCountryCode: c.defaultCountryCode ?? null,
+    defaultRoomTags: (c.defaultRoomTags ?? []).map((drt: any) => ({
+      slug: drt.tag.slug,
+      label: drt.tag.label,
+      group: drt.tag.group ?? null,
+    })),
     privateRateTokensPerMinute: c.privateRateTokensPerMinute || 0,
     minPrivateMinutes: c.minPrivateMinutes || 1,
     privateViewerCamRequired: c.privateViewerCamRequired ?? false,
     privateScreenShareAllowed: c.privateScreenShareAllowed ?? false,
-    createdAt: c.createdAt.toISOString()
+    privateRulesText: c.privateRulesText ?? null,
+    payoutStatus: c.payoutStatus ?? 'DISABLED',
+    pendingTokenBalance: c.pendingTokenBalance ?? 0,
+    createdAt: c.createdAt.toISOString(),
   }
+  if (c.rooms) {
+    base.rooms = c.rooms.map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      status: r.status,
+      category: r.category ?? null,
+      countryCode: r.countryCode ?? null,
+      viewerCount: r.viewerCount ?? 0,
+      startedAt: r.startedAt?.toISOString() ?? null,
+      endedAt: r.endedAt?.toISOString() ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }))
+  }
+  return base
 }
 
 export function formatPaymentTransactionDto(pt: any) {

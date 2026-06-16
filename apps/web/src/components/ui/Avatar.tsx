@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
 interface AvatarProps {
@@ -15,6 +16,12 @@ const sizes = {
 }
 
 export function Avatar({ src, name, size = 'md', className }: AvatarProps) {
+  const [imgError, setImgError] = useState(false)
+
+  useEffect(() => {
+    setImgError(false)
+  }, [src])
+
   const initials = name
     ?.split(' ')
     .map(w => w[0])
@@ -30,8 +37,8 @@ export function Avatar({ src, name, size = 'md', className }: AvatarProps) {
         className
       )}
     >
-      {src
-        ? <img src={src} alt={name ?? ''} className="h-full w-full object-cover" />
+      {src && !imgError
+        ? <img src={src} alt={name ?? ''} className="h-full w-full object-cover" onError={() => setImgError(true)} />
         : <span className="text-muted-foreground">{initials}</span>
       }
     </div>

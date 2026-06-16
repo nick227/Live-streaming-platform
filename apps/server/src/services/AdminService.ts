@@ -35,7 +35,7 @@ export class AdminService {
 
     const rooms = await db.room.findMany({
       where: {
-        ...(params.status ? { status: params.status as any } : {}),
+        ...(params.status ? { status: params.status as any } : { status: { not: 'HIDDEN' as any } }),
         ...(cursorPayload
           ? {
               OR: [
@@ -299,7 +299,10 @@ export class AdminService {
             }
           : {}),
       },
-      include: { user: { select: { id: true, displayName: true, email: true } } },
+      include: {
+        user: { select: { id: true, username: true, displayName: true, email: true } },
+        defaultRoomTags: { include: { tag: { select: { slug: true, label: true, group: true } } } },
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     })
@@ -568,7 +571,12 @@ export class AdminService {
       where: { id: creatorId },
       include: {
         user: true,
-        rooms: { orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, title: true, status: true, createdAt: true } },
+        defaultRoomTags: { include: { tag: { select: { slug: true, label: true, group: true } } } },
+        rooms: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: { id: true, title: true, status: true, category: true, countryCode: true, viewerCount: true, startedAt: true, endedAt: true, createdAt: true },
+        },
       },
     })
     if (!creator) throw httpError(404, 'Creator not found')

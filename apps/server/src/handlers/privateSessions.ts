@@ -11,7 +11,7 @@ export async function requestPrivateSession(request: any, reply: any) {
     io.to(`room:${request.params.roomId}`).emit('private:request_created', {
       privateSession: result.privateSession,
     })
-    io.to(`user:${request.user.id}`).emit('wallet:update', result.wallet)
+    io.to(`user:${request.user.id}`).emit('wallet:update', { wallet: result.wallet })
   }
   return reply.status(201).send({ data: result })
 }
@@ -40,6 +40,10 @@ export async function startPrivateSession(request: any, reply: any) {
   if (io) {
     const { privateSession } = result
     io.to(`user:${privateSession.viewerId}`).emit('private:session_started', { privateSession })
+    io.to(`room:${privateSession.publicRoomId}`).emit('room:active_private_started', {
+      roomId: privateSession.publicRoomId,
+      activePrivateSessionId: privateSession.id,
+    })
   }
   return reply.send({ data: result })
 }
@@ -50,8 +54,12 @@ export async function endPrivateSession(request: any, reply: any) {
   if (io) {
     const { privateSession } = result
     io.to(`user:${privateSession.viewerId}`).emit('private:session_ended', { privateSession })
+    io.to(`room:${privateSession.publicRoomId}`).emit('room:active_private_ended', {
+      roomId: privateSession.publicRoomId,
+      activePrivateSessionId: privateSession.id,
+    })
     if (result.wallet) {
-      io.to(`user:${privateSession.viewerId}`).emit('wallet:update', result.wallet)
+      io.to(`user:${privateSession.viewerId}`).emit('wallet:update', { wallet: result.wallet })
     }
   }
   return reply.send({ data: result })

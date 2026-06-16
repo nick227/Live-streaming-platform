@@ -1,6 +1,6 @@
 import { httpError } from '../lib/errors'
 import '../lib/env'
-import { AccessToken, RoomServiceClient } from 'livekit-server-sdk'
+import { AccessToken, RoomServiceClient, TrackSource, type VideoGrant } from 'livekit-server-sdk'
 import { db } from '@streamyolo/db'
 
 const LK_URL = process.env.LIVEKIT_URL ?? ''
@@ -40,6 +40,7 @@ export class LiveKitService {
 
     let livekitRoomName: string
     let canPublish: boolean
+    let canPublishSources: VideoGrant['canPublishSources'] | undefined
 
     if (input.appRoomType === 'PUBLIC_ROOM') {
       const room = await db.room.findUnique({
@@ -59,16 +60,33 @@ export class LiveKitService {
       }
       livekitRoomName = room.livekitRoomName
       canPublish = room.creator.userId === userId
+      canPublishSources = canPublish
+        ? [
+            TrackSource.CAMERA,
+            TrackSource.MICROPHONE,
+            TrackSource.SCREEN_SHARE,
+            TrackSource.SCREEN_SHARE_AUDIO,
+          ]
+        : undefined
     } else {
-      const session = await db.privateSession.findUnique({ where: { id: input.appRoomId } })
+      const session = await db.privateSession.findUnique({
+        where: { id: input.appRoomId },
+        include: { creator: true },
+      })
       if (!session) throw httpError(404, 'Private session not found')
-      if (session.viewerId !== userId) {
-        const creator = await db.creatorProfile.findUnique({ where: { id: session.creatorId } })
-        if (creator?.userId !== userId) throw httpError(403, 'Forbidden')
-      }
+      const isViewer = session.viewerId === userId
+      const isCreator = session.creator.userId === userId
+      if (!isViewer && !isCreator) throw httpError(403, 'Forbidden')
       if (!session.livekitRoomName) throw httpError(400, 'Session not started')
       livekitRoomName = session.livekitRoomName
       canPublish = true
+      canPublishSources = [TrackSource.MICROPHONE]
+      if (isCreator || session.viewerCamRequired) {
+        canPublishSources.push(TrackSource.CAMERA)
+      }
+      if (session.screenShareAllowed) {
+        canPublishSources.push(TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO)
+      }
     }
 
     const at = new AccessToken(LK_KEY, LK_SECRET, {
@@ -79,6 +97,7 @@ export class LiveKitService {
       roomJoin: true,
       room: livekitRoomName,
       canPublish,
+      ...(canPublishSources ? { canPublishSources } : {}),
       canSubscribe: true,
     })
 

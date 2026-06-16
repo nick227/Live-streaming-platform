@@ -53,7 +53,6 @@ import {
   HandleCcbillWebhookPage,
   PaymentReturnPage,
   LoginPage,
-  PrepareRoomPage,
   RegisterPage,
   RequestPrivateSessionPage,
   RoomMenuPage,
@@ -61,7 +60,9 @@ import {
   RoomModerationPage,
   RoomPage,
   RoomsPage,
+  UserChannelPage,
   StartPrivateSessionPage,
+  StudioPage,
   TokenPacksPage,
   UpdateCreatorMenuItemPage,
   UpdateCreatorProfilePage,
@@ -92,8 +93,10 @@ export function App() {
           <Route path="/rooms/c/:categories/t/:tags" element={<RoomsPage />} />
           <Route path="/rooms/country/:countries/t/:tags" element={<RoomsPage />} />
           <Route path="/rooms/c/:categories/country/:countries/t/:tags" element={<RoomsPage />} />
-          <Route path="/rooms/:slug" element={<RoomPage />} />
-          <Route path="/creator/rooms/prepare" element={<PrepareRoomPage />} />
+          <Route path="/rooms/:roomId" element={<RoomPage />} />
+
+          <Route path="/studio" element={<StudioPage />} />
+          <Route path="/creator/rooms/prepare" element={<Navigate to="/studio" replace />} />
           <Route path="/creator/rooms/:roomId/go-live" element={<GoLivePage />} />
           <Route path="/creator/rooms/:roomId/end" element={<EndRoomPage />} />
           <Route path="/creator/profile" element={<CreatorProfilePage />} />
@@ -124,6 +127,9 @@ export function App() {
           <Route path="/creator/earnings" element={<CreatorEarningsPage />} />
           <Route path="/creator/rooms" element={<CreatorRoomsPage />} />
           <Route path="/reports" element={<CreateReportPage />} />
+          
+          {/* Catch-all for user channel / offline profile */}
+          <Route path="/:username" element={<UserChannelPage />} />
           </Route>
         </Route>
 

@@ -5,15 +5,15 @@ import { db } from '@streamyolo/db'
 import { CreatorProfileService } from '../services/CreatorProfileService'
 
 vi.mock('../services/LiveKitService', () => ({
-  LiveKitService: vi.fn().mockImplementation(() => ({
-    createRoom: vi.fn().mockResolvedValue(undefined),
-    deleteRoom: vi.fn().mockResolvedValue(undefined),
-    getToken: vi.fn().mockResolvedValue({
+  LiveKitService: class {
+    createRoom = vi.fn().mockResolvedValue(undefined);
+    deleteRoom = vi.fn().mockResolvedValue(undefined);
+    getToken = vi.fn().mockResolvedValue({
       livekitUrl: 'wss://fake.livekit.cloud',
       token: 'fake-livekit-jwt-token',
       roomName: 'fake-room',
-    }),
-  })),
+    });
+  }
 }))
 
 const app = buildTestApp()
@@ -67,6 +67,16 @@ describe('Smoke Test - Room connection and lifecycle', () => {
     })
     sessionToken = session.token
 
+    // Create a media asset first
+    const media = await db.mediaAsset.create({
+      data: {
+        owner: { connect: { id: testUserId } },
+        type: 'ROOM_THUMBNAIL_CAPTURE',
+        url: 'http://example.com/thumb.jpg',
+        status: 'APPROVED'
+      }
+    })
+
     // 2. Prepare a room
     let res = await app.inject({
       method: 'POST',
@@ -74,11 +84,12 @@ describe('Smoke Test - Room connection and lifecycle', () => {
       headers: asAuth(testUserId),
       payload: {
         title: 'Smoke Test Room',
-        thumbnailMediaId: 'test-media-id',
+        thumbnailMediaId: media.id,
         category: 'FEMALE',
         countryCode: 'US',
       }
     })
+    if (res.statusCode !== 200) console.log(res.body)
     expect(res.statusCode).toBe(200)
     await validateResponse('prepareRoom', 200, res.json())
     let data = res.json().data

@@ -92,6 +92,7 @@ components:
       properties:
         id: { type: string }
         displayName: { type: string }
+        username: { type: string }
         role:
           type: string
           enum: [VIEWER, CREATOR, ADMIN, MODERATOR]
@@ -169,6 +170,7 @@ components:
       required: [displayName]
       properties:
         displayName: { type: string, minLength: 1, maxLength: 50 }
+        username: { type: string, minLength: 3, maxLength: 30, pattern: '^[a-zA-Z0-9_-]+$' }
 
     LoginInput:
       type: object
@@ -201,11 +203,12 @@ components:
 
     CreatorSummary:
       type: object
-      required: [id, userId, displayName, isLive]
+      required: [id, userId, displayName, isLive, user]
       properties:
         id: { type: string }
         userId: { type: string }
         displayName: { type: string }
+        user: { $ref: '#/components/schemas/PublicUser' }
         avatarUrl:
           type: string
           nullable: true
@@ -213,6 +216,24 @@ components:
         status:
           type: string
           enum: [DRAFT, PENDING, ACTIVE, PAUSED, SUSPENDED, BANNED]
+        bio:
+          type: string
+          nullable: true
+        privateRateTokensPerMinute:
+          type: integer
+          nullable: true
+        minPrivateMinutes:
+          type: integer
+          nullable: true
+        privateViewerCamRequired:
+          type: boolean
+          nullable: true
+        privateScreenShareAllowed:
+          type: boolean
+          nullable: true
+        privateRulesText:
+          type: string
+          nullable: true
 
     CreatorProfileSummary:
       type: object
@@ -232,6 +253,9 @@ components:
       properties:
         id: { type: string }
         userId: { type: string }
+        username:
+          type: string
+          nullable: true
         displayName: { type: string }
         bio:
           type: string
@@ -252,6 +276,16 @@ components:
         currentRoomId:
           type: string
           nullable: true
+        defaultRoomCategory:
+          type: string
+          enum: [MALE, FEMALE, COUPLES, TRANS, null]
+          nullable: true
+        defaultCountryCode:
+          type: string
+          nullable: true
+        defaultRoomTags:
+          type: array
+          items: { $ref: '#/components/schemas/RoomTagDto' }
         privateRateTokensPerMinute: { type: integer, minimum: 0 }
         minPrivateMinutes: { type: integer, minimum: 1 }
         privateViewerCamRequired: { type: boolean }
@@ -262,6 +296,31 @@ components:
         payoutStatus: { type: string }
         pendingTokenBalance: { type: integer }
         createdAt: { type: string, format: date-time }
+        rooms:
+          type: array
+          items:
+            type: object
+            required: [id, title, status, viewerCount, createdAt]
+            properties:
+              id: { type: string }
+              title: { type: string }
+              status: { type: string }
+              category:
+                type: string
+                nullable: true
+              countryCode:
+                type: string
+                nullable: true
+              viewerCount: { type: integer }
+              startedAt:
+                type: string
+                format: date-time
+                nullable: true
+              endedAt:
+                type: string
+                format: date-time
+                nullable: true
+              createdAt: { type: string, format: date-time }
 
     UpdateCreatorProfileInput:
       type: object
@@ -357,10 +416,9 @@ components:
 
     RoomCard:
       type: object
-      required: [id, slug, title, status, visibility, creator, viewerCount, privateAvailable, tags, createdAt]
+      required: [id, title, status, visibility, creator, viewerCount, activePrivateSessionId, privateAvailable, tags, createdAt]
       properties:
         id: { type: string }
-        slug: { type: string }
         title: { type: string }
         status:
           type: string
@@ -388,6 +446,9 @@ components:
           type: string
           nullable: true
         viewerCount: { type: integer }
+        activePrivateSessionId:
+          type: string
+          nullable: true
         privateAvailable: { type: boolean }
         privateRateTokensPerMinute:
           type: integer
@@ -400,10 +461,9 @@ components:
 
     RoomDetail:
       type: object
-      required: [id, slug, title, status, visibility, creator, viewerCount, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, tags, createdAt]
+      required: [id, title, status, visibility, creator, viewerCount, activePrivateSessionId, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, tags, createdAt]
       properties:
         id: { type: string }
-        slug: { type: string }
         title: { type: string }
         status:
           type: string
@@ -434,6 +494,9 @@ components:
           type: string
           nullable: true
         viewerCount: { type: integer }
+        activePrivateSessionId:
+          type: string
+          nullable: true
         privateRateTokensPerMinute: { type: integer }
         minPrivateMinutes: { type: integer }
         privateViewerCamRequired: { type: boolean }
@@ -1205,15 +1268,15 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/RoomTaxonomy' }
 
-  /rooms/{slug}:
+  /users/{username}:
     get:
-      operationId: getRoom
-      summary: Get a room by slug
+      operationId: getUserChannel
+      summary: Get a user channel by username
       security: []
-      tags: [rooms]
+      tags: [users]
       parameters:
         - in: path
-          name: slug
+          name: username
           required: true
           schema: { type: string }
       responses:
@@ -1227,9 +1290,14 @@ paths:
                 properties:
                   data:
                     type: object
-                    required: [room, viewerState, vipUserIds]
                     properties:
-                      room: { $ref: '#/components/schemas/RoomDetail' }
+                      user: { $ref: '#/components/schemas/PublicUser' }
+                      creator: 
+                        $ref: '#/components/schemas/CreatorSummary'
+                        nullable: true
+                      room: 
+                        $ref: '#/components/schemas/RoomDetail'
+                        nullable: true
                       livekitToken:
                         type: string
                         nullable: true
@@ -1590,6 +1658,7 @@ paths:
       operationId: getLivekitToken
       summary: Get a LiveKit participant token for a public room or private session
       tags: [livekit]
+      security: []
       requestBody:
         required: true
         content:
@@ -1622,6 +1691,37 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /rooms/{roomId}:
+    get:
+      operationId: getRoom
+      summary: Get a public room by ID
+      security: []
+      tags: [rooms]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Room detail with VIP user list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [room]
+                    properties:
+                      room: { $ref: '#/components/schemas/RoomDetail' }
+                      vipUserIds:
+                        type: array
+                        items: { type: string }
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   # ── Chat ─────────────────────────────────────────────────────────────────────
 

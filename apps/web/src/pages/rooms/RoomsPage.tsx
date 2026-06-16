@@ -90,95 +90,6 @@ export function RoomsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {taxonomy?.categories.map((category) => {
-          const active = filters.categories.includes(category.value as RoomCategory)
-          return (
-            <Button
-              key={category.value}
-              size="sm"
-              variant={active ? 'default' : 'outline'}
-              onClick={() => toggleCategory(category.value as RoomCategory)}
-            >
-              {category.label}
-            </Button>
-          )
-        })}
-        {(filters.categories.length > 0 || filters.countries.length > 0 || filters.tags.length > 0) && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => applyFilters({ categories: [], countries: [], tags: [], q: filters.q })}
-          >
-            Clear filters
-          </Button>
-        )}
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Country</p>
-          <div className="flex flex-wrap gap-2">
-            {popularCountries?.map((country) => {
-              const active = filters.countries.includes(country.code)
-              return (
-                <button
-                  key={country.code}
-                  type="button"
-                  onClick={() => toggleCountry(country.code)}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs transition-colors',
-                    active
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border hover:border-primary/50',
-                  )}
-                >
-                  {country.name}
-                </button>
-              )
-            })}
-          </div>
-          <select
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value=""
-            onChange={(event) => {
-              if (event.target.value) toggleCountry(event.target.value)
-            }}
-          >
-            <option value="">All countries…</option>
-            {taxonomy?.countries.map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tags</p>
-          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-            {taxonomy?.tags.map((tag) => {
-              const active = filters.tags.includes(tag.slug)
-              return (
-                <button
-                  key={tag.slug}
-                  type="button"
-                  onClick={() => toggleTag(tag.slug)}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs transition-colors',
-                    active
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border hover:border-primary/50',
-                  )}
-                >
-                  {tag.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
       <div className="flex items-center gap-3">
         <Input
           value={qInput}
@@ -191,7 +102,7 @@ export function RoomsPage() {
           Search
         </Button>
         <Button asChild size="md" variant="outline">
-          <Link to="/creator/rooms/prepare">
+          <Link to="/studio">
             <Plus className="h-4 w-4 mr-1" />
             New Room
           </Link>

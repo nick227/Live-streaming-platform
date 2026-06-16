@@ -316,13 +316,14 @@ model Room {
   id              String         @id @default(cuid())
   creatorId       String
   title           String
-  slug            String         @unique
   status          RoomStatus     @default(DRAFT)
   visibility      RoomVisibility @default(PUBLIC)
   livekitRoomName String         @unique
   // thumbnailMediaId is required for go-live; coverMediaId is optional fallback
   thumbnailMediaId String?
+  thumbnailMedia   MediaAsset? @relation("RoomThumbnail", fields: [thumbnailMediaId], references: [id])
   coverMediaId    String?
+  coverMedia      MediaAsset? @relation("RoomCover", fields: [coverMediaId], references: [id])
   viewerCount     Int            @default(0)
   startedAt       DateTime?
   endedAt         DateTime?
@@ -347,7 +348,6 @@ model Room {
 
   @@index([creatorId])
   @@index([status])
-  @@index([slug])
   @@index([createdAt])
   @@index([status, visibility, category])
   @@index([status, visibility, countryCode])
@@ -657,6 +657,8 @@ model MediaAsset {
 
   owner   User    @relation(fields: [ownerUserId], references: [id])
   room    Room?   @relation("RoomMedia", fields: [roomId], references: [id])
+  roomsWithThumbnail Room[] @relation("RoomThumbnail")
+  roomsWithCover     Room[] @relation("RoomCover")
   reports Report[] @relation("MediaReports")
 
   @@index([ownerUserId])

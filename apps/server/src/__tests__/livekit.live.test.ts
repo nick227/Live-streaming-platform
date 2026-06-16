@@ -36,7 +36,6 @@ describe.skipIf(!LK_URL || !LK_KEY || !LK_SECRET)(
         data: {
           creatorId: creator.id,
           title: 'LiveKit Test Room',
-          slug: `lk-test-${Date.now()}`,
           livekitRoomName: testRoomName,
           category: 'FEMALE',
           countryCode: 'US',

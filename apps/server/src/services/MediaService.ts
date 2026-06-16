@@ -1,8 +1,9 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { CREATOR_INCLUDE } from './RoomService'
 import { createWriteStream, mkdirSync } from 'fs'
+import { unlink } from 'fs/promises'
 import { resolve, extname } from 'path'
 import { nanoid } from 'nanoid'
 import { pipeline } from 'stream/promises'
@@ -54,6 +55,21 @@ function normalizeImageMimetype(mimetype: string, filename: string) {
   if (ALLOWED_MIME.has(mimetype)) return mimetype
   const fromExt = EXT_TO_MIME[extname(filename).toLowerCase()]
   return fromExt ?? mimetype
+}
+
+async function deleteFromS3(key: string): Promise<void> {
+  const client = new S3Client({
+    endpoint: s3Endpoint(),
+    region: 'auto',
+    credentials: { accessKeyId: STORAGE_ACCESS_KEY, secretAccessKey: STORAGE_SECRET_KEY },
+  })
+  await client.send(new DeleteObjectCommand({ Bucket: STORAGE_BUCKET, Key: key }))
+}
+
+async function deleteFromLocal(key: string): Promise<void> {
+  await unlink(resolve(UPLOAD_DIR, key)).catch(err => {
+    if (err.code !== 'ENOENT') throw err
+  })
 }
 
 async function uploadToS3(key: string, stream: NodeJS.ReadableStream, mimetype: string): Promise<string> {
@@ -124,6 +140,24 @@ export class MediaService {
     return asset
   }
 
+  async deleteMedia(mediaId: string) {
+    const asset = await db.mediaAsset.findUnique({ where: { id: mediaId } })
+    if (!asset) return
+
+    // Extract key from URL (assumes url ends with /key)
+    const key = asset.url.split('/').pop()
+    if (!key) return
+
+    if (useObjectStorage()) {
+      await deleteFromS3(key)
+    } else {
+      await deleteFromLocal(key)
+    }
+
+    // Delete DB record
+    await db.mediaAsset.delete({ where: { id: mediaId } })
+  }
+
   async captureRoomThumbnail(
     creatorUserId: string,
     roomId: string,
@@ -136,6 +170,8 @@ export class MediaService {
     if (!room) throw httpError(404, 'Room not found')
     if (room.creator.userId !== creatorUserId) throw httpError(403, 'Forbidden')
 
+    const oldMediaId = room.thumbnailMediaId
+
     const asset = await this.upload(creatorUserId, file, 'ROOM_THUMBNAIL_CAPTURE', {
       roomId,
       creatorId: room.creator.id,
@@ -147,6 +183,13 @@ export class MediaService {
       data: { thumbnailMediaId: asset.id },
       include: { creator: CREATOR_INCLUDE, goal: true, tags: { include: { tag: true } } },
     })
+
+    // Fire and forget deletion of old thumbnail
+    if (oldMediaId) {
+      this.deleteMedia(oldMediaId).catch(err => {
+        console.error('Failed to clean up old thumbnail:', err)
+      })
+    }
 
     return { media: asset, room: updatedRoom }
   }

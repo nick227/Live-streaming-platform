@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useRequestPrivateSession, useRoom, useWallet } from '@streamyolo/sdk'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -9,11 +9,13 @@ import { useState } from 'react'
 
 export function RequestPrivateSessionPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { roomId } = useParams<{ roomId: string }>()
   const { data: roomData, isLoading: roomLoading } = useRoom(roomId!)
   const { data: walletData } = useWallet()
   const mutation = useRequestPrivateSession()
   const [message, setMessage] = useState('')
+  const returnRoute = { pathname: location.pathname, search: location.search, hash: location.hash }
 
   if (roomLoading) return (
     <div className="space-y-4">
@@ -49,7 +51,7 @@ export function RequestPrivateSessionPage() {
         <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           ← Back
         </button>
-        <h1 className="text-xl font-semibold mt-2">Request Private Session</h1>
+        <h1 className="text-xl font-semibold mt-2">Request Private Session Media Space</h1>
         <p className="text-sm text-muted-foreground">with {room.creator?.displayName ?? 'Creator'}</p>
       </div>
 
@@ -66,13 +68,13 @@ export function RequestPrivateSessionPage() {
           {room.privateViewerCamRequired && (
             <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
               <Camera className="h-4 w-4 shrink-0" />
-              <span>Your camera is required</span>
+              <span>Your camera is required for this private session</span>
             </div>
           )}
           {room.privateScreenShareAllowed && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Monitor className="h-4 w-4 shrink-0" />
-              <span>Screen sharing allowed</span>
+              <span>Creator screen sharing allowed</span>
             </div>
           )}
           {room.privateRulesText && (
@@ -95,7 +97,7 @@ export function RequestPrivateSessionPage() {
       {!canAfford && (
         <p className="text-sm text-destructive">
           You need at least {minCost.toLocaleString()} tokens for the minimum session.{' '}
-          <button onClick={() => navigate('/token-packs')} className="underline">Buy tokens</button>
+          <button onClick={() => navigate('/token-packs', { state: { from: returnRoute } })} className="underline">Buy tokens</button>
         </p>
       )}
 

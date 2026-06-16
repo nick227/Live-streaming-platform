@@ -1,5 +1,4 @@
 import {
-  BROWSE_RESERVED_SEGMENTS,
   categoryEnumToSlug,
   categorySlugToEnum,
   type RoomCategory,
@@ -10,12 +9,6 @@ export type BrowseFilters = {
   countries: string[]
   tags: string[]
   q?: string
-}
-
-const RESERVED = new Set<string>(BROWSE_RESERVED_SEGMENTS)
-
-export function isBrowseReservedSegment(segment: string): boolean {
-  return RESERVED.has(segment)
 }
 
 function splitSegment(value: string): string[] {

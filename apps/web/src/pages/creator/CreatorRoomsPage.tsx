@@ -23,7 +23,7 @@ export function CreatorRoomsPage() {
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">My Rooms</h1>
         <Button asChild size="sm">
-          <Link to="/creator/rooms/prepare">
+          <Link to="/studio">
             <Radio className="h-4 w-4 mr-1.5" />
             New Room
           </Link>
@@ -64,13 +64,13 @@ export function CreatorRoomsPage() {
                 )}
                 {(room.status === 'DRAFT' || room.status === 'ENDED') && (
                   <Button asChild variant="ghost" size="sm" title="Go Live">
-                    <Link to={`/creator/rooms/${room.id}/go-live`}>
+                    <Link to="/studio" state={{ roomId: room.id }}>
                       <Radio className="h-4 w-4 text-primary" />
                     </Link>
                   </Button>
                 )}
                 <Button asChild variant="ghost" size="sm" title="Setup">
-                  <Link to="/creator/rooms/prepare">
+                  <Link to="/studio" state={{ roomId: room.id }}>
                     <Settings className="h-4 w-4" />
                   </Link>
                 </Button>

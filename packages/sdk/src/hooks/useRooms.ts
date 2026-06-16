@@ -26,6 +26,7 @@ export function useRooms(params?: ListRoomsParams) {
     queryKey: ['rooms', params],
     queryFn: async () =>
       unwrap(await getApiClient().GET('/rooms', { params: { query: params as Record<string, unknown> } })),
+    refetchInterval: 30_000,
   })
 }
 
@@ -37,12 +38,12 @@ export function useCreatorRooms(params?: { cursor?: string; limit?: number }) {
   })
 }
 
-export function useRoom(slug: string) {
+export function useRoom(roomId: string) {
   return useQuery({
-    queryKey: ['room', slug],
+    queryKey: ['room', roomId],
     queryFn: async () =>
-      unwrap(await getApiClient().GET('/rooms/{slug}', { params: { path: { slug } } })),
-    enabled: Boolean(slug),
+      unwrap(await getApiClient().GET('/rooms/{roomId}', { params: { path: { roomId } } })),
+    enabled: Boolean(roomId),
   })
 }
 
@@ -52,6 +53,18 @@ export function usePrepareRoom() {
     mutationFn: async (body: PrepareRoomBody) =>
       unwrap(await getApiClient().POST('/creator/rooms/prepare', { body })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
+  })
+}
+
+export function useUpdateCreatorRoom() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ roomId, body }: { roomId: string; body: Partial<PrepareRoomBody> }) =>
+      unwrap(await getApiClient().PUT('/creator/rooms/{roomId}', { params: { path: { roomId } }, body: body as any })),
+    onSuccess: (_, { roomId }) => {
+      qc.invalidateQueries({ queryKey: ['room', roomId] })
+      qc.invalidateQueries({ queryKey: ['rooms'] })
+    },
   })
 }
 
@@ -106,5 +119,14 @@ export function useRoomMenu(roomId: string) {
     queryFn: async () =>
       unwrap(await getApiClient().GET('/rooms/{roomId}/menu', { params: { path: { roomId } } })),
     enabled: Boolean(roomId),
+  })
+}
+
+export function useUserChannel(username: string) {
+  return useQuery({
+    queryKey: ['userChannel', username],
+    queryFn: async () =>
+      unwrap(await getApiClient().GET('/users/{username}', { params: { path: { username } } })),
+    enabled: Boolean(username),
   })
 }

@@ -92,7 +92,7 @@ Wallet balance shown persistently.
 ## Private session page
 
 ```txt
-Full viewport private room
+Full viewport Private Session
 Top overlay:
   PRIVATE
   timer

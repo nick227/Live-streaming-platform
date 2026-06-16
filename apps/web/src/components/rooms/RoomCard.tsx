@@ -12,7 +12,8 @@ interface RoomTag {
 
 interface RoomCardProps {
   room: {
-    slug: string
+    id: string
+    slug?: string | null
     title: string
     status: string
     viewerCount?: number
@@ -21,7 +22,11 @@ interface RoomCardProps {
     countryCode?: string | null
     countryName?: string | null
     tags?: RoomTag[]
-    creator?: { displayName?: string; avatarUrl?: string | null } | null
+    creator?: {
+      displayName?: string
+      avatarUrl?: string | null
+      user?: { username?: string | null } | null
+    } | null
   }
 }
 
@@ -29,9 +34,10 @@ export function RoomCard({ room }: RoomCardProps) {
   const isLive = room.status === 'LIVE'
   const visibleTags = room.tags?.slice(0, 3) ?? []
   const extraTagCount = (room.tags?.length ?? 0) - visibleTags.length
+  const href = room.creator?.user?.username ? `/${room.creator.user.username}` : `/rooms/${room.id}`
 
   return (
-    <Link to={`/rooms/${room.slug}`}>
+    <Link to={href}>
       <Card className={cn('overflow-hidden transition-all hover:ring-2 hover:ring-primary/40', isLive && 'ring-1 ring-destructive/30')}>
         <div className="relative aspect-video bg-muted">
           {room.thumbnailUrl ? (

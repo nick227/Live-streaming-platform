@@ -51,7 +51,7 @@ function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: R
 
 export function AdminShell() {
   const { data } = useCurrentUser()
-  const user = (data as any)?.data
+  const user = (data as any)?.data?.user
 
   if (user && user.role !== 'ADMIN') {
     return <Navigate to="/rooms" replace />
@@ -94,7 +94,7 @@ export function AdminShell() {
             </nav>
           </div>
 
-          <main className="p-6 max-w-5xl">
+          <main className="p-6 max-w-5xl mx-auto">
             <Outlet />
           </main>
         </div>

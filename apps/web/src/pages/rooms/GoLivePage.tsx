@@ -23,11 +23,12 @@ import {
   useRoomTaxonomy,
   useCreatorProfile,
   useUpdateCreatorProfile,
+  useCurrentUser,
 } from '@streamyolo/sdk'
 import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { LiveKitRoom, VideoTrack, useLocalParticipant } from '@livekit/components-react'
+import { LiveKitRoom, VideoTrack, useLocalParticipant, useRoomContext } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 import {
   Camera,
@@ -181,52 +182,133 @@ function privateRequestViewer(request: any) {
 
 // ─── LocalPreview ─────────────────────────────────────────────────────────────
 
-function LocalPreview({ isFullscreen }: { isFullscreen: boolean }) {
+function PreviewVideo({
+  stream,
+  error,
+  isFullscreen,
+}: {
+  stream: MediaStream | null
+  error: string | null
+  isFullscreen: boolean
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
-    let stream: MediaStream | null = null
-    navigator.mediaDevices
-      .getUserMedia({ video: true, audio: true })
-      .then((s) => {
-        stream = s
-        if (videoRef.current) videoRef.current.srcObject = stream
-      })
-      .catch((err) => {
-        console.error('Failed to get camera', err)
-        toast.error('Could not access camera/mic')
-      })
+    if (videoRef.current) videoRef.current.srcObject = stream
     return () => {
-      if (stream) stream.getTracks().forEach((t) => t.stop())
+      if (videoRef.current) videoRef.current.srcObject = null
     }
-  }, [])
+  }, [stream])
 
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      muted
-      className={cn(
-        'block transform scale-x-[-1] bg-black',
-        isFullscreen ? 'w-full h-full object-contain' : 'w-full',
+    <div className={cn('relative bg-black', isFullscreen ? 'w-full h-full' : 'w-full aspect-video')}>
+      {(error || !stream) && (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
+          {error ?? 'Camera connecting...'}
+        </div>
       )}
-    />
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className={cn(
+          'absolute inset-0 block h-full w-full transform scale-x-[-1] bg-black',
+          isFullscreen ? 'object-contain' : 'object-cover',
+          (error || !stream) && 'hidden',
+        )}
+      />
+    </div>
   )
 }
 
 // ─── PublishedTracks ──────────────────────────────────────────────────────────
 
-function PublishedTracks({
+function PublishPreviewTracks({
+  stream,
   isMuted,
   isVideoOff,
-  isFullscreen,
+  onError,
 }: {
+  stream: MediaStream | null
   isMuted: boolean
   isVideoOff: boolean
-  isFullscreen: boolean
+  onError: (message: string) => void
 }) {
-  const { localParticipant, cameraTrack, lastCameraError } = useLocalParticipant()
+  const room = useRoomContext()
+  const publishedRef = useRef<MediaStream | null>(null)
+
+  useEffect(() => {
+    if (!stream || publishedRef.current === stream) return
+
+    let cancelled = false
+    const videoTrack = stream.getVideoTracks()[0]
+    const audioTrack = stream.getAudioTracks()[0]
+
+    async function publish() {
+      try {
+        if (audioTrack) {
+          audioTrack.enabled = !isMuted
+          await room.localParticipant.publishTrack(audioTrack, {
+            source: Track.Source.Microphone,
+            stream: 'camera',
+          })
+        }
+        if (videoTrack) {
+          videoTrack.enabled = !isVideoOff
+          await room.localParticipant.publishTrack(videoTrack, {
+            source: Track.Source.Camera,
+            stream: 'camera',
+          })
+        }
+        if (!cancelled) publishedRef.current = stream
+      } catch (err) {
+        if (!cancelled) {
+          onError(err instanceof Error ? err.message : 'Failed to publish camera')
+        }
+      }
+    }
+
+    void publish()
+
+    return () => {
+      cancelled = true
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream, room, onError])
+
+  useEffect(() => {
+    const microphone = room.localParticipant.getTrackPublication(Track.Source.Microphone)
+    const camera = room.localParticipant.getTrackPublication(Track.Source.Camera)
+
+    if (microphone) {
+      void (isMuted ? microphone.mute() : microphone.unmute())
+    } else {
+      const audioTrack = stream?.getAudioTracks()[0]
+      if (audioTrack) audioTrack.enabled = !isMuted
+    }
+
+    if (camera) {
+      void (isVideoOff ? camera.mute() : camera.unmute())
+    } else {
+      const videoTrack = stream?.getVideoTracks()[0]
+      if (videoTrack) videoTrack.enabled = !isVideoOff
+    }
+  }, [room, stream, isMuted, isVideoOff])
+
+  return null
+}
+
+function PublishedTracks({
+  isFullscreen,
+  previewStream,
+  previewError,
+}: {
+  isFullscreen: boolean
+  previewStream: MediaStream | null
+  previewError: string | null
+}) {
+  const { localParticipant, cameraTrack } = useLocalParticipant()
   const cameraTrackRef = cameraTrack
     ? {
         participant: localParticipant,
@@ -235,20 +317,10 @@ function PublishedTracks({
       }
     : null
 
-  useEffect(() => {
-    if (localParticipant) localParticipant.setMicrophoneEnabled(!isMuted).catch(() => { })
-  }, [isMuted, localParticipant])
-
-  useEffect(() => {
-    if (localParticipant) localParticipant.setCameraEnabled(!isVideoOff).catch(() => { })
-  }, [isVideoOff, localParticipant])
-
   return (
     <div className={cn('relative bg-black', isFullscreen ? 'w-full h-full' : 'w-full aspect-video')}>
       {!cameraTrackRef && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
-          {lastCameraError ? 'Camera unavailable' : 'Camera connecting...'}
-        </div>
+        <PreviewVideo stream={previewStream} error={previewError} isFullscreen={isFullscreen} />
       )}
       {cameraTrackRef && (
         <VideoTrack
@@ -273,6 +345,8 @@ function LiveBroadcast({
   isMuted,
   isVideoOff,
   isFullscreen,
+  previewStream,
+  previewError,
 }: {
   token: string
   serverUrl: string
@@ -280,22 +354,57 @@ function LiveBroadcast({
   isMuted: boolean
   isVideoOff: boolean
   isFullscreen: boolean
+  previewStream: MediaStream | null
+  previewError: string | null
 }) {
+  const handlePublishError = useCallback((message: string) => {
+    toast.error(message)
+  }, [])
+
   return (
     <LiveKitRoom
-      video
-      audio
+      video={false}
+      audio={false}
       token={token}
       serverUrl={serverUrl}
+      options={{ stopLocalTrackOnUnpublish: false }}
       onDisconnected={onDisconnect}
       className={cn('bg-black', isFullscreen ? 'w-full h-full' : 'w-full aspect-video')}
     >
-      <PublishedTracks
+      <PublishPreviewTracks
+        stream={previewStream}
         isMuted={isMuted}
         isVideoOff={isVideoOff}
+        onError={handlePublishError}
+      />
+      <PublishedTracks
         isFullscreen={isFullscreen}
+        previewStream={previewStream}
+        previewError={previewError}
       />
     </LiveKitRoom>
+  )
+}
+
+// ─── AudioWaveform ────────────────────────────────────────────────────────────
+
+function AudioWaveform() {
+  const bars = [0.45, 0.85, 0.6]
+  return (
+    <div className="h-9 w-9 flex items-center justify-center gap-[3px] rounded-full bg-black/50 backdrop-blur-sm">
+      {bars.map((heightScale, i) => (
+        <div
+          key={i}
+          className="w-[3px] rounded-full animate-pulse"
+          style={{
+            height: `${Math.round(heightScale * 18)}px`,
+            animationDelay: `${i * 180}ms`,
+            backgroundColor: '#ffffff',
+            boxShadow: '0 0 6px 2px rgba(255,255,255,0.8)',
+          }}
+        />
+      ))}
+    </div>
   )
 }
 
@@ -317,12 +426,9 @@ function StateBadge({ state }: { state: BroadcastState }) {
       </span>
     )
   }
-  return (
-    <span className="flex items-center gap-2 bg-red-600/90 text-white text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm">
-      <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-      LIVE
-    </span>
-  )
+  // If state is LIVE_PUBLIC or LIVE_PRIVATE, return null
+  // because there is already a clickable LIVE button in the bottom right corner
+  return null
 }
 
 // ─── IconControlButton ────────────────────────────────────────────────────────
@@ -378,6 +484,8 @@ interface VideoContainerProps {
   loadingCapture: boolean
   viewerCount: number
   canStartBroadcast: boolean
+  previewStream: MediaStream | null
+  previewError: string | null
 }
 
 function VideoContainer({
@@ -398,6 +506,8 @@ function VideoContainer({
   loadingCapture,
   viewerCount,
   canStartBroadcast,
+  previewStream,
+  previewError,
 }: VideoContainerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -457,7 +567,7 @@ function VideoContainer({
     >
       {/* Video */}
       {state === 'PREVIEW_LOCAL' || state === 'STARTING' || state === 'ENDED' ? (
-        <LocalPreview isFullscreen={isFullscreen} />
+        <PreviewVideo stream={previewStream} error={previewError} isFullscreen={isFullscreen} />
       ) : livekitToken && livekitUrl ? (
         <LiveBroadcast
           token={livekitToken}
@@ -466,8 +576,14 @@ function VideoContainer({
           isMuted={isMuted}
           isVideoOff={isVideoOff}
           isFullscreen={isFullscreen}
+          previewStream={previewStream}
+          previewError={previewError}
         />
-      ) : null}
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-black text-white/50 text-sm">
+          Loading camera...
+        </div>
+      )}
 
       {/* Overlay (auto-hides when live) */}
       <div
@@ -520,6 +636,7 @@ function VideoContainer({
                   >
                     {isVideoOff ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
                   </IconControlButton>
+                  {!isMuted && <AudioWaveform />}
                 </>
               )}
             </div>
@@ -564,14 +681,17 @@ function VideoContainer({
 
 // ─── GoLivePage ───────────────────────────────────────────────────────────────
 
-export function GoLivePage() {
+export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { roomId } = useParams<{ roomId: string }>()
+  const { roomId: routeRoomId } = useParams<{ roomId: string }>()
+  const roomId = studioRoomId ?? routeRoomId
   const { data: roomData } = useRoom(roomId!)
   const room = roomData?.data?.room
 
   const [state, setState] = useState<BroadcastState>('PREVIEW_LOCAL')
+  const broadcastStateRef = useRef<BroadcastState>('PREVIEW_LOCAL')
+  useEffect(() => { broadcastStateRef.current = state }, [state])
   const [livekitToken, setLivekitToken] = useState<string | null>(null)
   const [livekitUrl, setLivekitUrl] = useState<string | null>(null)
   const [currentPrivateSession, setCurrentPrivateSession] = useState<any | null>(null)
@@ -580,8 +700,11 @@ export function GoLivePage() {
   const [eventFilter, setEventFilter] = useState<ChatFilter>('CHAT')
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoOff, setIsVideoOff] = useState(false)
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const videoContainerRef = useRef<HTMLDivElement>(null)
 
+  const [editTitle, setEditTitle] = useState('')
   const [editCategory, setEditCategory] = useState<RoomCategory | ''>('')
   const [editCountryCode, setEditCountryCode] = useState('')
   const [editTagSlugs, setEditTagSlugs] = useState<string[]>([])
@@ -591,9 +714,38 @@ export function GoLivePage() {
   const updateRoomMutation = useUpdateCreatorRoom()
   const { data: profileData } = useCreatorProfile()
   const updateProfileMutation = useUpdateCreatorProfile()
+  const { data: meData } = useCurrentUser()
 
   useEffect(() => {
-    if (room) {
+    let cancelled = false
+    let stream: MediaStream | null = null
+
+    navigator.mediaDevices
+      .getUserMedia({ video: true, audio: true })
+      .then((nextStream) => {
+        if (cancelled) {
+          nextStream.getTracks().forEach((track) => track.stop())
+          return
+        }
+        stream = nextStream
+        setPreviewStream(nextStream)
+        setPreviewError(null)
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewError('Camera unavailable')
+      })
+
+    return () => {
+      cancelled = true
+      stream?.getTracks().forEach((track) => track.stop())
+    }
+  }, [])
+
+  const initializedRef = useRef(false)
+  useEffect(() => {
+    if (room && !initializedRef.current) {
+      initializedRef.current = true
+      setEditTitle(room.title || '')
       const category = room.category
       setEditCategory(
         category === 'MALE' || category === 'FEMALE' || category === 'COUPLES' || category === 'TRANS'
@@ -610,6 +762,23 @@ export function GoLivePage() {
   const endPrivateMutation = useEndPrivateSession()
   const getLivekitToken = useGetLivekitToken()
   const captureThumbnail = useCaptureRoomThumbnail()
+
+  const fetchedTokenRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!room?.id || room.status !== 'LIVE' || fetchedTokenRef.current === room.id) return
+    fetchedTokenRef.current = room.id
+    getLivekitToken.mutateAsync({ appRoomType: 'PUBLIC_ROOM', appRoomId: room.id })
+      .then((res: any) => {
+        setLivekitToken(res.data.token)
+        setLivekitUrl(res.data.livekitUrl)
+        setState('LIVE_PUBLIC')
+      })
+      .catch((err) => {
+        console.error('Failed to pre-fetch livekit token', err)
+      })
+  // getLivekitToken is a mutation object — new ref every render but stable behavior
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.id, room?.status])
   const acceptMutation = useAcceptPrivateSession()
   const startPrivateMutation = useStartPrivateSession()
   const muteMutation = useMuteRoomUser()
@@ -639,11 +808,14 @@ export function GoLivePage() {
   }, [queryClient, roomId])
   const onRoomEnded = useCallback(() => {
     toast.info('Broadcast ended')
-    setState('ENDED')
-    // Always return to the creator go-live screen for this room.
-    // Using history back can land on unrelated pages (e.g. menu items).
-    navigate(`/creator/rooms/${roomId}/go-live`, { replace: true })
-  }, [navigate, roomId])
+    queryClient.invalidateQueries({ queryKey: ['rooms'] })
+    setLivekitToken(null)
+    setLivekitUrl(null)
+    setCurrentPrivateSession(null)
+    setPrivateStartedAt(null)
+    setState('PREVIEW_LOCAL')
+    navigate(studioRoomId ? '/studio' : `/creator/rooms/${roomId}/go-live`, { replace: true })
+  }, [navigate, roomId, queryClient, studioRoomId])
   const onMessagePinned = useCallback(() => {
     toast.success('Message pinned')
   }, [])
@@ -704,15 +876,25 @@ export function GoLivePage() {
     }
   }, [messages, privateReqs?.data])
   const displayViewerCount = viewerCount ?? room?.viewerCount ?? 0
+  const isLive = state === 'LIVE_PUBLIC' || state === 'LIVE_PRIVATE'
   const isPrivate = state === 'LIVE_PRIVATE'
+
+  useEffect(() => {
+    if (!isLive) return
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isLive])
+
   const canStartBroadcast = Boolean(
     room?.title?.trim() &&
     room.thumbnailUrl &&
     editCategory &&
     editCountryCode &&
-    profile?.status === 'ACTIVE' &&
-    (profile?.privateRateTokensPerMinute ?? 0) > 0 &&
-    (profile?.minPrivateMinutes ?? 0) > 0,
+    profile?.status === 'ACTIVE',
   )
 
   const elapsedPrivateSeconds = privateStartedAt
@@ -738,6 +920,7 @@ export function GoLivePage() {
   }, [state])
 
   async function autosaveRoomDetails(next: {
+    title?: string
     category?: RoomCategory
     countryCode?: string
     tagSlugs?: string[]
@@ -751,6 +934,11 @@ export function GoLivePage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update room')
     }
+  }
+
+  function handleTitleBlur() {
+    if (!room || room.title === editTitle) return
+    void autosaveRoomDetails({ title: editTitle })
   }
 
   function handleCategoryChange(value: string) {
@@ -800,8 +988,10 @@ export function GoLivePage() {
     try {
       setState('STARTING')
       const res = await goLiveMutation.mutateAsync(roomId!)
-      setLivekitToken((res as any).data.livekitToken)
-      setLivekitUrl((res as any).data.livekitUrl)
+      if (!livekitToken) {
+        setLivekitToken((res as any).data.livekitToken)
+        setLivekitUrl((res as any).data.livekitUrl)
+      }
       setState('LIVE_PUBLIC')
       toast.success("You're live!")
     } catch (err) {
@@ -815,13 +1005,30 @@ export function GoLivePage() {
     try {
       setState('ENDING')
       await endMutation.mutateAsync(roomId!)
-      setState('ENDED')
+      setLivekitToken(null)
+      setLivekitUrl(null)
+      setCurrentPrivateSession(null)
+      setPrivateStartedAt(null)
+      setState('PREVIEW_LOCAL')
       toast.success('Broadcast ended')
     } catch {
       setState('LIVE_PUBLIC')
       toast.error('Failed to end room')
     }
   }
+
+  // Called when LiveKit disconnects. Only fires endRoom if we're actually live —
+  // guards against double-calling after intentional handleEndRoom.
+  const handleDisconnect = useCallback(() => {
+    if (broadcastStateRef.current === 'LIVE_PUBLIC' || broadcastStateRef.current === 'LIVE_PRIVATE') {
+      endMutation.mutateAsync(roomId!).catch(() => {})
+    }
+    setLivekitToken(null)
+    setLivekitUrl(null)
+    setCurrentPrivateSession(null)
+    setPrivateStartedAt(null)
+    setState('PREVIEW_LOCAL')
+  }, [endMutation, roomId])
 
   const handleAcceptPrivate = async (sessionId: string) => {
     try {
@@ -932,10 +1139,10 @@ export function GoLivePage() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-4 xl:gap-6 items-start">
-
-      {/* ── Left column ── */}
-      <div className="flex flex-col gap-4">
+    <>
+      {/* ── Broadcast content — centered against full viewport ── */}
+      <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col gap-4">
+      <div className="flex flex-col gap-4 broadcast-section">
 
         {/* Room header */}
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3">
@@ -949,7 +1156,14 @@ export function GoLivePage() {
                 )}
               </div>
               <div>
-                <h1 className="text-lg font-bold leading-tight truncate">{room.title}</h1>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={handleTitleBlur}
+                  placeholder="Enter room title..."
+                  className="w-full bg-transparent text-lg font-bold leading-tight truncate border-none outline-none focus:ring-0 p-0 placeholder-muted-foreground/50"
+                />
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isPrivate
                     ? 'Private session active'
@@ -959,6 +1173,18 @@ export function GoLivePage() {
                         ? 'Starting broadcast…'
                         : 'Ready to broadcast'}
                 </p>
+                {meData?.data?.user?.username && (
+                  <div className="mt-1">
+                    <a 
+                      href={`/${meData.data.user.username}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-muted-foreground hover:text-primary transition-colors inline-block"
+                    >
+                      {window.location.origin}/{meData.data.user.username}
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -979,12 +1205,14 @@ export function GoLivePage() {
             onGoLive={handleGoLive}
             onEndRoom={handleEndRoom}
             onCaptureThumbnail={handleCaptureThumbnail}
-            onDisconnect={() => setState('ENDED')}
+            onDisconnect={handleDisconnect}
             loadingGoLive={goLiveMutation.isPending}
             loadingEnd={endMutation.isPending}
             loadingCapture={captureThumbnail.isPending}
             viewerCount={displayViewerCount}
             canStartBroadcast={canStartBroadcast}
+            previewStream={previewStream}
+            previewError={previewError}
           />
 
           {(state === 'PREVIEW_LOCAL' || state === 'ENDED') && (
@@ -1001,7 +1229,7 @@ export function GoLivePage() {
               </Button>
 
               <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <LabeledSelect
                     id="category"
                     label=""
@@ -1018,6 +1246,14 @@ export function GoLivePage() {
                     onChange={handleCountryChange}
                     placeholder="Select"
                   />
+                  <LabeledSelect
+                    id="privatePreset"
+                    label=""
+                    value={privateValue}
+                    options={privateOptions.map((p) => ({ label: p.label, value: p.value }))}
+                    onChange={handlePrivatePresetChange}
+                    placeholder="Private Rate"
+                  />
                   <MultiSelectDropdown
                     label=""
                     options={taxonomy?.tags.map((t) => ({ label: t.label, value: t.slug })) ?? []}
@@ -1027,13 +1263,6 @@ export function GoLivePage() {
                   />
                 </div>
 
-                <LabeledSelect
-                  id="privatePreset"
-                  label="Private"
-                  value={privateValue}
-                  options={privateOptions}
-                  onChange={handlePrivatePresetChange}
-                />
               </div>
             </div>
           )}
@@ -1117,9 +1346,45 @@ export function GoLivePage() {
         )}
       </div>
 
-      {/* ── Right column: chat + viewers ── */}
-      <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:h-[calc(100vh-2rem)] xl:overflow-hidden">
-        <div className="flex-1 min-h-0 flex flex-col">
+        {/* Mobile: chat inline below broadcast */}
+        <div className="flex flex-col gap-4 lg:hidden">
+          <div className="flex-1 min-h-0 flex flex-col">
+            <CreatorStudioChat
+              messages={messages}
+              pinnedMessage={pinnedMessage}
+              slowModeSeconds={slowModeSeconds}
+              vipUserIds={vipUserIds}
+              eventFilter={eventFilter}
+              onEventFilterChange={setEventFilter}
+              onUserAction={handleUserAction}
+              onDeleteMessage={handleDeleteMessage}
+              onPinMessage={handlePinMessage}
+            />
+          </div>
+          {activeViewers.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-3 space-y-2">
+              <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-1">
+                Recent Viewers ({activeViewers.length})
+              </h2>
+              <div className="space-y-0.5 max-h-36 overflow-y-auto">
+                {activeViewers.map((viewer) => (
+                  <div
+                    key={viewer.id}
+                    className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/40 transition-colors"
+                  >
+                    <span className="text-sm font-medium truncate">{userLabel(viewer)}</span>
+                    <ModerationActionBar userId={viewer.id} onUserAction={handleUserAction} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Fixed chat panel (desktop only) — out of DOM flow ── */}
+      <div className="hidden lg:flex fixed right-0 top-14 h-[calc(100vh-3.5rem)] w-[360px] xl:w-[400px] flex-col border-l border-border bg-background z-10">
+        <div className="flex-1 min-h-0 flex flex-col p-3">
           <CreatorStudioChat
             messages={messages}
             pinnedMessage={pinnedMessage}
@@ -1132,9 +1397,8 @@ export function GoLivePage() {
             onPinMessage={handlePinMessage}
           />
         </div>
-
         {activeViewers.length > 0 && (
-          <div className="rounded-xl border border-border bg-card p-3 space-y-2 shrink-0">
+          <div className="shrink-0 border-t border-border p-3 space-y-2">
             <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-1">
               Recent Viewers ({activeViewers.length})
             </h2>
@@ -1152,6 +1416,6 @@ export function GoLivePage() {
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

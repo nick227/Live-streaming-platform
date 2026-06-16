@@ -12,7 +12,10 @@ export function attachRoomSocket(
   const socket = io(SERVER_URL, { withCredentials: true })
   socketRef.current = socket
 
-  const onConnect = () => actions.setConnected(true)
+  const onConnect = () => {
+    actions.setConnected(true)
+    socket.emit('room:join', { roomId })
+  }
   const onDisconnect = () => actions.setConnected(false)
   const onViewerCount = (data: { viewerCount: number }) => actions.setViewerCount(data.viewerCount)
   const onChatMessage = (payload: { message: ChatMessageDto }) => {
@@ -65,11 +68,23 @@ export function attachRoomSocket(
     actions.setPrivateRequestStatus('ACTIVE')
     actions.navigate(`/private-sessions/${payload.privateSession.id}/active`)
   }
+  const onActivePrivateStarted = (payload: { roomId: string; activePrivateSessionId: string }) => {
+    actions.getCallbacks()?.onActivePrivateStarted?.(payload)
+  }
+  const onActivePrivateEnded = (payload: { roomId: string; activePrivateSessionId: string }) => {
+    actions.getCallbacks()?.onActivePrivateEnded?.(payload)
+  }
   const onRoomStarted = (payload: { roomId: string }) => {
     actions.getCallbacks()?.onRoomStarted?.(payload)
   }
   const onRoomEnded = (payload: { roomId: string; reason?: string }) => {
     actions.getCallbacks()?.onRoomEnded?.(payload)
+  }
+  const onRoomReconnecting = (payload: { roomId: string }) => {
+    actions.getCallbacks()?.onRoomReconnecting?.(payload)
+  }
+  const onRoomReconnected = (payload: { roomId: string }) => {
+    actions.getCallbacks()?.onRoomReconnected?.(payload)
   }
   const onUserKicked = () => {
     actions.toastError('You were removed from the room.')
@@ -85,7 +100,6 @@ export function attachRoomSocket(
 
   socket.on('connect', onConnect)
   socket.on('disconnect', onDisconnect)
-  socket.emit('room:join', { roomId })
   socket.on('room:viewer_count', onViewerCount)
   socket.on('chat:message', onChatMessage)
   socket.on('tip:created', onTipCreated)
@@ -98,8 +112,12 @@ export function attachRoomSocket(
   socket.on('private:request_accepted', onPrivateRequestAccepted)
   socket.on('private:request_declined', onPrivateRequestDeclined)
   socket.on('private:session_started', onPrivateSessionStarted)
+  socket.on('room:active_private_started', onActivePrivateStarted)
+  socket.on('room:active_private_ended', onActivePrivateEnded)
   socket.on('room:started', onRoomStarted)
   socket.on('room:ended', onRoomEnded)
+  socket.on('room:reconnecting', onRoomReconnecting)
+  socket.on('room:reconnected', onRoomReconnected)
   socket.on('room:user_kicked', onUserKicked)
   socket.on('room:user_banned', onUserBanned)
   socket.on('room:user_muted', onUserMuted)
@@ -120,7 +138,12 @@ export function attachRoomSocket(
     socket.off('private:request_accepted', onPrivateRequestAccepted)
     socket.off('private:request_declined', onPrivateRequestDeclined)
     socket.off('private:session_started', onPrivateSessionStarted)
+    socket.off('room:active_private_started', onActivePrivateStarted)
+    socket.off('room:active_private_ended', onActivePrivateEnded)
+    socket.off('room:started', onRoomStarted)
     socket.off('room:ended', onRoomEnded)
+    socket.off('room:reconnecting', onRoomReconnecting)
+    socket.off('room:reconnected', onRoomReconnected)
     socket.off('room:user_kicked', onUserKicked)
     socket.off('room:user_banned', onUserBanned)
     socket.off('room:user_muted', onUserMuted)

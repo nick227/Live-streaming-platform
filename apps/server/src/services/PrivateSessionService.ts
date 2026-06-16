@@ -221,15 +221,15 @@ export class PrivateSessionService {
     if (!session.startedAt || !session.hardEndAt) throw httpError(400, 'Session not started')
 
     if (session.status === 'ENDED' || session.status === 'FORCE_ENDED' || session.status === 'EXPIRED') {
-      const viewerWallet = await db.wallet.findUnique({ where: { userId: session.viewerId } })
+      const viewerWallet = await db.wallet.findUniqueOrThrow({ where: { userId: session.viewerId } })
       return {
         privateSession: formatSession(session),
-        wallet: viewerWallet ? {
+        wallet: {
           tokenBalance: viewerWallet.tokenBalance,
           reservedTokenBalance: viewerWallet.reservedTokenBalance,
           lifetimePurchasedTokens: viewerWallet.lifetimePurchasedTokens,
           lifetimeSpentTokens: viewerWallet.lifetimeSpentTokens,
-        } : undefined,
+        },
       }
     }
 

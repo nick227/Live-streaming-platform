@@ -46,8 +46,16 @@ describe('goLive', () => {
     await db.creatorMenuItem.create({
       data: { creatorId: creator.id, label: 'Shoutout', tokenAmount: 50, isActive: true }
     })
+    const media2 = await db.mediaAsset.create({
+      data: {
+        owner: { connect: { id: creator.userId } },
+        type: 'ROOM_THUMBNAIL_CAPTURE',
+        url: 'http://example.com/thumb.jpg',
+        status: 'APPROVED'
+      }
+    })
     const room = await db.room.create({
-      data: { creatorId: creator.id, title: 'Prepared Room', slug: 'prepared-room', livekitRoomName: 'room-123', thumbnailMediaId: 'media-123', category: 'FEMALE', countryCode: 'US' },
+      data: { creatorId: creator.id, title: 'Prepared Room', livekitRoomName: 'room-123', thumbnailMediaId: media2.id, category: 'FEMALE', countryCode: 'US' },
     })
 
     const res = await app.inject({

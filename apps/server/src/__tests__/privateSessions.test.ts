@@ -42,14 +42,21 @@ describe('Private Sessions Settlement Math', () => {
         minPrivateMinutes: 1,
       },
     })
+    const media = await db.mediaAsset.create({
+      data: {
+        owner: { connect: { id: creator.id } },
+        type: 'ROOM_THUMBNAIL_CAPTURE',
+        url: 'http://example.com/thumb.jpg',
+        status: 'APPROVED'
+      }
+    })
     room = await db.room.create({
       data: {
         id: nanoid(),
         creatorId: creatorProfile.id,
         status: 'LIVE',
         title: 'Test Room',
-        thumbnailMediaId: 'dummy',
-        slug: nanoid(),
+        thumbnailMediaId: media.id,
         livekitRoomName: nanoid(),
       },
     })
@@ -67,6 +74,7 @@ describe('Private Sessions Settlement Math', () => {
     await db.privateSession.deleteMany()
     await db.room.deleteMany()
     await db.creatorProfile.deleteMany()
+    await db.mediaAsset.deleteMany()
     await db.user.deleteMany()
   })
 

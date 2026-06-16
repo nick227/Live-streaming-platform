@@ -15,13 +15,20 @@ function slugifyDisplayName(displayName: string) {
     .slice(0, 24)
 }
 
+const RESERVED_USERNAMES = [
+  'admin', 'creator', 'tokens', 'wallet', 'private', 'payments', 'login', 'signup', 'register',
+  'rooms', 'media', 'reports', 'webhooks', 'api', 'livekit', 'token-packs', 'private-sessions',
+  'settings', 'profile', 'home', 'about', 'help', 'support', 'contact', 'terms', 'privacy',
+  'channel', 'user', 'dashboard', 'auth', 'search', 'explore', 'discover', 'categories'
+]
+
 async function uniqueUsername(tx: { user: { findUnique: (args: { where: { username: string } }) => Promise<unknown | null> } }, displayName: string) {
   let base = slugifyDisplayName(displayName)
   if (base.length < 3) base = `user_${nanoid(8)}`
 
   let candidate = base
   let suffix = 0
-  while (await tx.user.findUnique({ where: { username: candidate } })) {
+  while (RESERVED_USERNAMES.includes(candidate) || await tx.user.findUnique({ where: { username: candidate } })) {
     suffix += 1
     candidate = `${base.slice(0, 20)}_${suffix}`
   }
@@ -69,7 +76,28 @@ export class AuthService {
     return { user, token: session.token }
   }
 
-  async updateCurrentUser(userId: string, data: { displayName: string }) {
+  async updateCurrentUser(userId: string, data: { displayName: string; username?: string }) {
+    if (data.username !== undefined) {
+      if (!/^[a-zA-Z0-9_-]+$/.test(data.username) || data.username.length < 3 || data.username.length > 30) {
+        throw httpError(400, 'Invalid username format (3-30 chars, letters, numbers, -, _)')
+      }
+
+      const lower = data.username.toLowerCase()
+      if (RESERVED_USERNAMES.includes(lower)) {
+        throw httpError(400, 'Username is reserved')
+      }
+
+      const existing = await db.user.findUnique({ where: { username: lower } })
+      if (existing && existing.id !== userId) {
+        throw httpError(409, 'Username is already taken')
+      }
+
+      return db.user.update({
+        where: { id: userId },
+        data: { displayName: data.displayName, username: lower },
+      })
+    }
+
     return db.user.update({
       where: { id: userId },
       data: { displayName: data.displayName },

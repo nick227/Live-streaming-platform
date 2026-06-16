@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getApiClient, unwrap } from '../client'
+import type { components } from '../generated/types'
+
+type UpdateCurrentUserInput = components['schemas']['UpdateCurrentUserInput']
 
 export function useCurrentUser() {
   return useQuery({
@@ -13,7 +16,7 @@ export function useCurrentUser() {
 export function useUpdateCurrentUser() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (body: { displayName: string }) =>
+    mutationFn: async (body: UpdateCurrentUserInput) =>
       unwrap(await getApiClient().PATCH('/auth/me', { body })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] })

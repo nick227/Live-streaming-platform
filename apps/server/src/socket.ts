@@ -3,8 +3,12 @@ import type { FastifyInstance } from 'fastify'
 import type { ServerToClientEvents, ClientToServerEvents } from '@streamyolo/shared'
 import { db } from '@streamyolo/db'
 import { ModerationService } from './services/ModerationService'
+import { RoomService } from './services/RoomService'
 
 const moderationService = new ModerationService()
+const roomService = new RoomService()
+
+const creatorDisconnectTimers = new Map<string, NodeJS.Timeout>()
 
 export function attachSocketIO(server: FastifyInstance) {
   const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(server.server, {
@@ -47,6 +51,8 @@ export function attachSocketIO(server: FastifyInstance) {
   }
 
   io.on('connection', (socket) => {
+    socket.join(`user:${socket.data.userId}`)
+
     socket.on('room:join', async ({ roomId }, ack) => {
       try {
         const userId = (socket as any).userId
@@ -63,8 +69,20 @@ export function attachSocketIO(server: FastifyInstance) {
         const room = await db.room.update({
           where: { id: roomId },
           data: { viewerCount: { increment: 1 } },
-          select: { viewerCount: true },
+          select: { viewerCount: true, creatorId: true },
         })
+
+        // Check if user is the creator and clear disconnect timer
+        const creator = await db.creatorProfile.findUnique({ where: { userId } })
+        if (creator && creator.id === room.creatorId) {
+          const timer = creatorDisconnectTimers.get(roomId)
+          if (timer) {
+            clearTimeout(timer)
+            creatorDisconnectTimers.delete(roomId)
+            io.to(`room:${roomId}`).emit('room:reconnected', { roomId })
+          }
+        }
+
         ack?.({ ok: true })
         io.to(`room:${roomId}`).emit('room:viewer_count', { roomId, viewerCount: room.viewerCount })
       } catch {
@@ -85,6 +103,37 @@ export function attachSocketIO(server: FastifyInstance) {
       if (!joinedRooms?.size) return
       for (const roomId of joinedRooms) {
         await decrementViewerCount(roomId).catch(() => {})
+        
+        try {
+          const userId = socket.data.userId
+          const creator = await db.creatorProfile.findUnique({ where: { userId } })
+          if (creator) {
+            const room = await db.room.findFirst({
+              where: { id: roomId, creatorId: creator.id, status: 'LIVE' },
+            })
+            if (room) {
+              io.to(`room:${roomId}`).emit('room:reconnecting', { roomId })
+              const timer = setTimeout(async () => {
+                try {
+                  const current = await db.room.findFirst({
+                    where: { id: roomId, status: 'LIVE' },
+                  })
+                  if (current) {
+                    await roomService.endRoom(userId, roomId)
+                    io.to(`room:${roomId}`).emit('room:ended', { roomId })
+                  }
+                } catch (e) {
+                  console.error('[Socket] Failed to end room on timeout', e)
+                } finally {
+                  creatorDisconnectTimers.delete(roomId)
+                }
+              }, 45000)
+              creatorDisconnectTimers.set(roomId, timer)
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
       }
     })
 

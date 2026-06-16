@@ -195,7 +195,6 @@ export async function createRoom(creatorOrUserId: string) {
     data: {
       creatorId: creator.id,
       title: 'Test Room',
-      slug: `test-room-${Math.random()}`,
       livekitRoomName: `lk-${Math.random()}`,
       category: 'FEMALE',
       countryCode: 'US',
@@ -206,18 +205,36 @@ export async function createRoom(creatorOrUserId: string) {
 export async function createLiveRoom(creatorOrUserId: string) {
   let creator = await db.creatorProfile.findUnique({ where: { userId: creatorOrUserId } })
   if (!creator) creator = await db.creatorProfile.findUniqueOrThrow({ where: { id: creatorOrUserId } })
-  return db.room.create({
+  const media = await db.mediaAsset.create({
+    data: {
+      owner: { connect: { id: creator.userId } },
+      type: 'ROOM_THUMBNAIL_CAPTURE',
+      url: 'http://example.com/thumb.jpg',
+      status: 'APPROVED'
+    }
+  })
+
+  const room = await db.room.create({
     data: {
       creatorId: creator.id,
       title: 'Live Room',
-      slug: `live-room-${Math.random()}`,
       livekitRoomName: `lk-live-${Math.random()}`,
       status: 'LIVE',
-      thumbnailMediaId: 'dummy-media',
+      thumbnailMediaId: media.id,
       category: 'FEMALE',
       countryCode: 'US',
     }
   })
+
+  await db.creatorProfile.update({
+    where: { id: creator.id },
+    data: {
+      isLive: true,
+      currentRoomId: room.id,
+    }
+  })
+
+  return room
 }
 
 export async function createWallet(userId: string = testUserId, balance: number = 1000) {

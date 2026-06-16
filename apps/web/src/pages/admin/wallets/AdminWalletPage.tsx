@@ -1,9 +1,9 @@
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAdminWallet } from '@streamyolo/sdk'
 import { LedgerList } from '@/components/wallet/LedgerList'
+import { LedgerLoadingSkeleton } from '@/components/wallet/LedgerLoadingSkeleton'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { Skeleton } from '@/components/ui/Skeleton'
 import { Coins } from 'lucide-react'
 
 export function AdminWalletPage() {
@@ -11,12 +11,7 @@ export function AdminWalletPage() {
   const navigate = useNavigate()
   const { data, isLoading } = useAdminWallet(userId!)
 
-  if (isLoading) return (
-    <div className="space-y-4">
-      <Skeleton className="h-28 w-full rounded-xl" />
-      {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
-    </div>
-  )
+  if (isLoading) return <LedgerLoadingSkeleton />
 
   const inner = (data as any)?.data
   if (!inner) return <p className="text-muted-foreground">Wallet not found.</p>

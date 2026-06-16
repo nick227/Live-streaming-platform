@@ -31,7 +31,7 @@ export async function createTip(request: any, reply: any) {
         createdAt: message.createdAt.toISOString(),
       },
     })
-    io.to(`user:${request.user.id}`).emit('wallet:update', result.wallet)
+    io.to(`user:${request.user.id}`).emit('wallet:update', { wallet: result.wallet })
   }
   return reply.status(201).send({ data: result })
 }

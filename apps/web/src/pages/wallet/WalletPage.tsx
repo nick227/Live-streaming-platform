@@ -1,5 +1,5 @@
 import { useWallet } from '@streamyolo/sdk'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { LedgerEntryRow } from '@/components/wallet/LedgerEntryRow'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -8,7 +8,9 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Coins, ShoppingCart } from 'lucide-react'
 
 export function WalletPage() {
+  const location = useLocation()
   const { data, isLoading } = useWallet()
+  const returnRoute = { pathname: location.pathname, search: location.search, hash: location.hash }
 
   if (isLoading) return (
     <div className="space-y-4">
@@ -35,7 +37,7 @@ export function WalletPage() {
             </div>
           </div>
           <Button asChild variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
-            <Link to="/token-packs">
+            <Link to="/token-packs" state={{ from: returnRoute }}>
               <ShoppingCart className="h-4 w-4 mr-2" />
               Buy Tokens
             </Link>

@@ -74,7 +74,7 @@ Third-party services
 
 - Go live: Creator setup complete → Room created → LiveKit room token → Socket room online.
 - Tip: Viewer action → Wallet debit/credit → Ledger entries → Chat event.
-- Private: Request → Verify balance → Hold tokens → Create LiveKit private room → Meter capture/release.
+- Private Session: Request → Verify balance → Hold tokens → Create isolated LiveKit media space → Meter capture/release.
 - Payment: CCBill checkout → webhook → idempotent credit → ledger.
 
 ## Data retention

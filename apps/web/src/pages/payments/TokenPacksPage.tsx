@@ -2,17 +2,27 @@ import { useTokenPacks, useCreateCheckout, usePlatformSettings } from '@streamyo
 import { TokenPackCard } from '@/components/tokens/TokenPackCard'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Coins, Ban } from 'lucide-react'
+import { Coins, Ban, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { getTokenPackReturnTarget, rememberTokenPackReturnTarget } from '@/lib/paymentReturn'
+import { useEffect } from 'react'
 
 export function TokenPacksPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const { data: settingsData, isLoading: settingsLoading } = usePlatformSettings()
   const { data, isLoading: packsLoading } = useTokenPacks()
   const checkout = useCreateCheckout()
   const qc = useQueryClient()
+  const returnTo = getTokenPackReturnTarget(location)
 
   const isLoading = settingsLoading || packsLoading
+
+  useEffect(() => {
+    rememberTokenPackReturnTarget(returnTo)
+  }, [returnTo])
 
   if (isLoading) return (
     <div className="space-y-4">
@@ -28,7 +38,11 @@ export function TokenPacksPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-xl font-semibold">Buy Tokens</h1>
+          <Link to={returnTo} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="h-4 w-4" />
+            Back to previous page
+          </Link>
+          <h1 className="text-xl font-semibold mt-2">Buy Tokens</h1>
         </div>
         <EmptyState
           icon={Ban}
@@ -44,7 +58,11 @@ export function TokenPacksPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Buy Tokens</h1>
+        <Link to={returnTo} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+          Back to previous page
+        </Link>
+        <h1 className="text-xl font-semibold mt-2">Buy Tokens</h1>
         <p className="text-sm text-muted-foreground mt-1">Tokens are used to tip creators and unlock private sessions.</p>
       </div>
 
@@ -55,7 +73,7 @@ export function TokenPacksPage() {
           description="Check back soon."
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {packs.map((pack) => (
             <TokenPackCard
               key={pack.id}
@@ -69,6 +87,7 @@ export function TokenPacksPage() {
                   } else if (result.status === 'APPROVED') {
                     toast.success(`Purchased ${result.tokensCredited ?? 0} tokens successfully!`)
                     qc.invalidateQueries({ queryKey: ['wallet'] })
+                    navigate(returnTo, { replace: true })
                   }
                 } catch {
                   toast.error('Failed to start checkout')
