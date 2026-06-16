@@ -1,9 +1,11 @@
 import { ChatMessageList } from '../message/ChatMessageList'
 import { ChatComposer } from '../composer/ChatComposer'
+import { ChatShell } from '../primitives/ChatShell'
 import { PinnedMessageBanner } from '../primitives/PinnedMessageBanner'
 import type { ChatMessageDto, RoomEvent } from '../model/types'
 
 export function ViewerChatPanel({
+  className,
   messages,
   pinnedMessage,
   canChat,
@@ -11,6 +13,7 @@ export function ViewerChatPanel({
   sending,
   onSend,
 }: {
+  className?: string
   messages: RoomEvent[]
   pinnedMessage?: ChatMessageDto | null
   canChat: boolean
@@ -19,16 +22,15 @@ export function ViewerChatPanel({
   onSend: (body: string) => Promise<void>
 }) {
   return (
-    <div className="flex flex-col gap-2 min-h-0 h-full">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Chat</h2>
-        <span className="text-xs text-muted-foreground">
-          {connected ? 'Live' : 'Connecting...'}
-        </span>
-      </div>
-      {pinnedMessage && <PinnedMessageBanner message={pinnedMessage} variant="viewer" />}
+    <ChatShell
+      className={className}
+      connected={connected}
+      bannerSlot={pinnedMessage ? <PinnedMessageBanner message={pinnedMessage} variant="viewer" /> : undefined}
+      footer={
+        <ChatComposer canChat={canChat} connected={connected} sending={sending} onSend={onSend} />
+      }
+    >
       <ChatMessageList messages={messages} />
-      <ChatComposer canChat={canChat} connected={connected} sending={sending} onSend={onSend} />
-    </div>
+    </ChatShell>
   )
 }
