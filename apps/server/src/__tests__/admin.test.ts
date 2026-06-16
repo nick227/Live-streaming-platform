@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { db } from '@streamyolo/db'
 import {
   buildTestApp, asAuth, validateResponse, testUserId, testOtherUserId, testAdminId,
   createTestCreator, createRoom, createWallet, createPayment, createPrivateSession, createMediaAsset, createReport
@@ -313,9 +314,137 @@ describe('adminReviewReport', () => {
       method: 'POST',
       url: `/admin/reports/${report.id}/review`,
       headers: asAuth(testAdminId),
-      payload: { status: 'DISMISSED' },
+      payload: { status: 'ACTIONED', adminNotes: 'Action taken' },
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('adminReviewReport', 200, res.json())
+  })
+})
+
+describe('getAdminSettings', () => {
+  it('GET /admin/settings', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/settings',
+      headers: asAuth(testAdminId),
+    })
+    expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('updateAdminSettings', () => {
+  it('PATCH /admin/settings', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/settings',
+      headers: asAuth(testAdminId),
+      payload: { activePaymentProvider: 'DEMO', tokenPurchasesEnabled: true },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('getAdminUserWallet', () => {
+  it('GET /admin/users/{userId}/wallet', async () => {
+    await createWallet(testOtherUserId)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/admin/users/${testOtherUserId}/wallet`,
+      headers: asAuth(testAdminId),
+    })
+    expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('adminGrantTokens', () => {
+  it('POST /admin/users/{userId}/wallet/grant', async () => {
+    await createWallet(testOtherUserId)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/users/${testOtherUserId}/wallet/grant`,
+      headers: asAuth(testAdminId),
+      payload: { amountTokens: 100, reason: 'Test grant' },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('adminRevokeTokens', () => {
+  it('POST /admin/users/{userId}/wallet/revoke', async () => {
+    await createWallet(testOtherUserId)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/users/${testOtherUserId}/wallet/revoke`,
+      headers: asAuth(testAdminId),
+      payload: { amountTokens: 50, reason: 'Test revoke' },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('adminResetWallet', () => {
+  it('POST /admin/users/{userId}/wallet/reset', async () => {
+    await createWallet(testOtherUserId)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/users/${testOtherUserId}/wallet/reset`,
+      headers: asAuth(testAdminId),
+      payload: { reason: 'Test reset' },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('adminReconcileWallets', () => {
+  it('returns no discrepancies when there are no wallets', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/wallets/reconcile',
+      headers: asAuth(testAdminId),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.ok).toBe(true)
+    expect(body.checkedWallets).toBe(0)
+    expect(body.discrepancies).toEqual([])
+  })
+
+  it('reports a token balance mismatch when stored balance differs from ledger sum', async () => {
+    // Wallet has tokenBalance=500 but no ledger entries → ledger sum=0 → delta=500
+    await createWallet(testOtherUserId, 500)
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/wallets/reconcile',
+      headers: asAuth(testAdminId),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.discrepancies.length).toBeGreaterThanOrEqual(1)
+    const issue = body.discrepancies.find((d: any) => d.userId === testOtherUserId)
+    expect(issue).toBeDefined()
+    expect(issue.actualTokenBalance).toBe(500)
+    expect(issue.expectedTokenBalance).toBe(0)
+  })
+
+  it('reports a reserved balance mismatch when stored reserved differs from active session sum', async () => {
+    await createTestCreator(testOtherUserId)
+    const room = await createRoom(testOtherUserId)
+    // createPrivateSession sets wallet.reservedTokenBalance = 50 and session.reservedTokens = 50 (balanced)
+    await createPrivateSession(room.id, testUserId)
+    // Manually zero-out the wallet's reservedTokenBalance to create the mismatch
+    await db.wallet.update({ where: { userId: testUserId }, data: { reservedTokenBalance: 0 } })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/wallets/reconcile',
+      headers: asAuth(testAdminId),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    const issue = body.discrepancies.find((d: any) => d.userId === testUserId)
+    expect(issue).toBeDefined()
+    expect(issue.expectedReservedTokenBalance).toBe(50)
+    expect(issue.actualReservedTokenBalance).toBe(0)
   })
 })

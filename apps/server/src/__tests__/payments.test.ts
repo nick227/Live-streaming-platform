@@ -7,6 +7,81 @@ import { db } from '@streamyolo/db'
 
 const app = buildTestApp()
 
+describe('createCheckout', () => {
+  it('returns 403 when tokenPurchasesEnabled is false', async () => {
+    await db.platformSettings.upsert({
+      where: { id: 'singleton' },
+      update: { activePaymentProvider: 'DEMO', tokenPurchasesEnabled: false },
+      create: { id: 'singleton', activePaymentProvider: 'DEMO', tokenPurchasesEnabled: false },
+    })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/payments/checkout',
+      headers: asAuth(testUserId),
+      payload: { tokenPackId: 'pack-500' },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toBe('Token purchases are currently disabled')
+  })
+
+  it('handles DEMO token purchase immediately', async () => {
+    // 1. Ensure settings are DEMO
+    await db.platformSettings.upsert({
+      where: { id: 'singleton' },
+      update: { activePaymentProvider: 'DEMO', tokenPurchasesEnabled: true },
+      create: { id: 'singleton', activePaymentProvider: 'DEMO', tokenPurchasesEnabled: true }
+    })
+    
+    // 2. Ensure test user has a wallet
+    await db.wallet.upsert({
+      where: { userId: testUserId },
+      update: {},
+      create: { userId: testUserId, tokenBalance: 0 }
+    })
+
+    // 3. Ensure token pack exists
+    await db.tokenPack.upsert({
+      where: { id: 'pack-500' },
+      update: { isActive: true },
+      create: {
+        id: 'pack-500',
+        name: 'Demo 500',
+        priceCents: 499,
+        tokenAmount: 500,
+        bonusTokenAmount: 0,
+        currency: 'USD',
+        isActive: true,
+        sortOrder: 1,
+      },
+    })
+
+    // 4. Make checkout request
+    const res = await app.inject({
+      method: 'POST',
+      url: '/payments/checkout',
+      headers: asAuth(testUserId),
+      payload: { tokenPackId: 'pack-500' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.status).toBe('APPROVED')
+    expect(body.tokensCredited).toBe(500)
+
+    // 5. Verify wallet and ledger
+    const wallet = await db.wallet.findUnique({ where: { userId: testUserId } })
+    expect(wallet?.tokenBalance).toBe(500)
+    
+    const ledger = await db.ledgerEntry.findFirst({
+      where: { walletId: wallet!.id, type: 'DEMO_TOKEN_GRANT' }
+    })
+    expect(ledger).toBeDefined()
+    expect(ledger?.amountTokens).toBe(500)
+  })
+})
+
 describe('createCcbillCheckout', () => {
   it('requires auth', async () => {
     const res = await app.inject({ method: 'POST', url: '/payments/ccbill/checkout' })

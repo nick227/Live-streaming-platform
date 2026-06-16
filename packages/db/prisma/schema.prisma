@@ -55,6 +55,7 @@ enum RoomCategory {
 
 enum PaymentProvider {
   CCBILL
+  DEMO
 }
 
 enum PaymentStatus {
@@ -74,9 +75,12 @@ enum LedgerEntryType {
   PRIVATE_SESSION_HOLD
   PRIVATE_SESSION_CAPTURE
   PRIVATE_SESSION_RELEASE
+  PRIVATE_SESSION_EARNED
   REFUND_REVERSAL
   CHARGEBACK_REVERSAL
   ADMIN_ADJUSTMENT
+  DEMO_TOKEN_GRANT
+  TEST_RESET
 }
 
 enum ChatMessageType {
@@ -621,7 +625,9 @@ model PrivateSession {
   requestedAt         DateTime             @default(now())
   acceptedAt          DateTime?
   startedAt           DateTime?
+  hardEndAt           DateTime?
   endedAt             DateTime?
+  endedReason         String?              @db.Text
   declineReason       String?              @db.Text
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -709,4 +715,11 @@ model AdminAction {
   @@index([adminUserId, createdAt])
   @@index([targetUserId])
   @@index([type])
+}
+
+model PlatformSettings {
+  id                    String          @id @default("singleton")
+  activePaymentProvider PaymentProvider @default(DEMO)
+  tokenPurchasesEnabled Boolean         @default(true)
+  updatedAt             DateTime        @updatedAt
 }

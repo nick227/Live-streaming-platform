@@ -2,6 +2,19 @@ import { PaymentService } from '../services/PaymentService'
 
 const paymentService = new PaymentService()
 
+export async function createCheckout(request: any, reply: any) {
+  try {
+    const { tokenPackId } = request.body
+    const result = await paymentService.createCheckout(request.user.id, tokenPackId)
+    return reply.send(result) // The schema expects the object directly, not wrapped in { data: }
+  } catch (err: any) {
+    if (err.statusCode) {
+      return reply.status(err.statusCode).send({ error: err.message })
+    }
+    throw err
+  }
+}
+
 export async function createCcbillCheckout(request: any, reply: any) {
   try {
     const { tokenPackId } = request.body

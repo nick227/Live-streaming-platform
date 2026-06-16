@@ -18,8 +18,8 @@ export type RoomSocketCallbacks = {
   onTipCreated?: (payload: { tip: { amountTokens: number }; message: ChatMessageDto }) => void
   onUserRewarded?: (payload: { reward: { type: string } }) => void
   onGoalUpdated?: (payload: { roomId: string; goal: RoomGoal }) => void
-  onPrivateRequestCreated?: () => void
-  onPrivateRequestStatusChanged?: (payload: { status: string }) => void
+  onPrivateRequestCreated?: (payload: unknown) => void
+  onPrivateRequestStatusChanged?: (payload: { status: 'ACCEPTED' | 'DECLINED'; privateSessionId?: string }) => void
   onRoomEnded?: (payload: { roomId: string; reason?: string }) => void
   onMessagePinned?: (payload: { pinnedMessage?: ChatMessageDto | null }) => void
 }
@@ -33,7 +33,7 @@ export function useRoomSocket(
   const [messages, setMessages] = useState<RoomEvent[]>([])
   const [viewerCount, setViewerCount] = useState<number | null>(null)
   const [pinnedMessage, setPinnedMessage] = useState<ChatMessageDto | null>(null)
-  const [privateRequestStatus, setPrivateRequestStatus] = useState<'IDLE' | 'PENDING' | 'ACCEPTED' | 'DECLINED'>('IDLE')
+  const [privateRequestStatus, setPrivateRequestStatus] = useState<'IDLE' | 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'ACTIVE'>('IDLE')
   const [connected, setConnected] = useState(false)
   const [sending, setSending] = useState(false)
   const socketRef = useRef<Socket | null>(null)
@@ -84,14 +84,20 @@ export function useRoomSocket(
     const onGoalUpdated = (payload: { roomId: string; goal: RoomGoal }) => {
       callbacksRef.current?.onGoalUpdated?.(payload)
     }
-    const onPrivateRequestCreated = () => {
-      callbacksRef.current?.onPrivateRequestCreated?.()
+    const onPrivateRequestCreated = (payload: unknown) => {
+      callbacksRef.current?.onPrivateRequestCreated?.(payload)
     }
-    const onPrivateRequestStatusChanged = (payload: { status: string }) => {
-      if (payload.status === 'ACCEPTED') setPrivateRequestStatus('ACCEPTED')
-      else if (payload.status === 'DECLINED') setPrivateRequestStatus('DECLINED')
-      else if (payload.status === 'PENDING') setPrivateRequestStatus('PENDING')
-      callbacksRef.current?.onPrivateRequestStatusChanged?.(payload)
+    const onPrivateRequestAccepted = (payload: { privateSession: { id: string } }) => {
+      setPrivateRequestStatus('ACCEPTED')
+      callbacksRef.current?.onPrivateRequestStatusChanged?.({ status: 'ACCEPTED', privateSessionId: payload.privateSession.id })
+    }
+    const onPrivateRequestDeclined = (payload: { privateSession?: { id: string } }) => {
+      setPrivateRequestStatus('DECLINED')
+      callbacksRef.current?.onPrivateRequestStatusChanged?.({ status: 'DECLINED', privateSessionId: payload.privateSession?.id })
+    }
+    const onPrivateSessionStarted = (payload: { privateSession: { id: string } }) => {
+      setPrivateRequestStatus('ACTIVE')
+      navigate(`/private-sessions/${payload.privateSession.id}/active`)
     }
     const onRoomEnded = (payload: { roomId: string; reason?: string }) => {
       callbacksRef.current?.onRoomEnded?.(payload)
@@ -119,7 +125,9 @@ export function useRoomSocket(
     socket.on('room:user_rewarded', onUserRewarded)
     socket.on('goal:updated', onGoalUpdated)
     socket.on('private:request_created', onPrivateRequestCreated)
-    socket.on('private:request_status_changed', onPrivateRequestStatusChanged)
+    socket.on('private:request_accepted', onPrivateRequestAccepted)
+    socket.on('private:request_declined', onPrivateRequestDeclined)
+    socket.on('private:session_started', onPrivateSessionStarted)
     socket.on('room:ended', onRoomEnded)
     socket.on('room:user_kicked', onUserKicked)
     socket.on('room:user_banned', onUserBanned)
@@ -137,7 +145,9 @@ export function useRoomSocket(
       socket.off('room:user_rewarded', onUserRewarded)
       socket.off('goal:updated', onGoalUpdated)
       socket.off('private:request_created', onPrivateRequestCreated)
-      socket.off('private:request_status_changed', onPrivateRequestStatusChanged)
+      socket.off('private:request_accepted', onPrivateRequestAccepted)
+      socket.off('private:request_declined', onPrivateRequestDeclined)
+      socket.off('private:session_started', onPrivateSessionStarted)
       socket.off('room:ended', onRoomEnded)
       socket.off('room:user_kicked', onUserKicked)
       socket.off('room:user_banned', onUserBanned)

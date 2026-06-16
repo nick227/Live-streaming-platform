@@ -16,7 +16,7 @@ export function StartPrivateSessionPage() {
           try {
             await mutation.mutateAsync(sessionId!)
             toast.success('Session started')
-            navigate(-1)
+            navigate(`/private-sessions/${sessionId}/active`)
           } catch {
             toast.error('Failed to start session')
           }

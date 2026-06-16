@@ -60,7 +60,7 @@ export async function endPrivateSession(request: any, reply: any) {
 export async function getCreatorPrivateSessions(request: any, reply: any) {
   const room = await db.room.findUnique({
     where: { id: request.params.roomId },
-    include: { creator: true },
+    select: { creatorId: true, creator: { select: { userId: true } } },
   })
   if (!room) return reply.status(404).send({ error: 'Room not found' })
   if (room.creator.userId !== request.user.id) return reply.status(403).send({ error: 'Forbidden' })
@@ -71,7 +71,9 @@ export async function getCreatorPrivateSessions(request: any, reply: any) {
       creatorId: room.creatorId,
       status: { in: ['REQUESTED', 'ACCEPTED', 'ACTIVE'] },
     },
-    include: { viewer: true },
+    include: {
+      viewer: { select: { id: true, displayName: true, username: true } },
+    },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -80,10 +82,9 @@ export async function getCreatorPrivateSessions(request: any, reply: any) {
     viewer: {
       id: s.viewer.id,
       displayName: s.viewer.displayName ?? s.viewer.username ?? null,
-      avatarMediaId: s.viewer.avatarMediaId ?? null,
+      avatarMediaId: null,
     },
   }))
 
   return reply.send({ data: formatted })
 }
-

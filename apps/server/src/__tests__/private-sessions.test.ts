@@ -100,7 +100,9 @@ describe('endPrivateSession', () => {
     await createActiveCreator(testOtherUserId)
     const room = await createLiveRoom(testOtherUserId)
     const session = await createPrivateSession(room.id, testUserId)
-    await db.privateSession.update({ where: { id: session.id }, data: { status: 'ACTIVE', startedAt: new Date() } })
+    const startedAt = new Date()
+    const hardEndAt = new Date(startedAt.getTime() + 10 * 60 * 1000)
+    await db.privateSession.update({ where: { id: session.id }, data: { status: 'ACTIVE', startedAt, hardEndAt } })
 
     const res = await app.inject({
       method: 'POST',

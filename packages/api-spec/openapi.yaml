@@ -123,9 +123,12 @@ components:
             - PRIVATE_SESSION_HOLD
             - PRIVATE_SESSION_CAPTURE
             - PRIVATE_SESSION_RELEASE
+            - PRIVATE_SESSION_EARNED
             - REFUND_REVERSAL
             - CHARGEBACK_REVERSAL
             - ADMIN_ADJUSTMENT
+            - DEMO_TOKEN_GRANT
+            - TEST_RESET
         amountTokens: { type: integer }
         balanceAfter: { type: integer }
         description:
@@ -833,9 +836,16 @@ components:
           type: string
           format: date-time
           nullable: true
+        hardEndAt:
+          type: string
+          format: date-time
+          nullable: true
         endedAt:
           type: string
           format: date-time
+          nullable: true
+        endedReason:
+          type: string
           nullable: true
         declineReason:
           type: string
@@ -3179,6 +3189,39 @@ paths:
                     properties:
                       wallet: { $ref: '#/components/schemas/WalletSummary' }
                       ledgerEntry: { $ref: '#/components/schemas/LedgerEntryDto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/wallets/reconcile:
+    post:
+      operationId: adminReconcileWallets
+      summary: Run wallet reconciliation — compare stored balances to ledger sums
+      tags: [admin]
+      responses:
+        '200':
+          description: Reconciliation report
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, checkedWallets, discrepancies]
+                properties:
+                  ok: { type: boolean }
+                  checkedWallets: { type: integer }
+                  discrepancies:
+                    type: array
+                    items:
+                      type: object
+                      required: [userId, walletId, expectedTokenBalance, actualTokenBalance, expectedReservedTokenBalance, actualReservedTokenBalance]
+                      properties:
+                        userId: { type: string }
+                        walletId: { type: string }
+                        expectedTokenBalance: { type: integer }
+                        actualTokenBalance: { type: integer }
+                        expectedReservedTokenBalance: { type: integer }
+                        actualReservedTokenBalance: { type: integer }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

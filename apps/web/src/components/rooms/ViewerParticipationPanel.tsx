@@ -22,8 +22,8 @@ export function ViewerParticipationPanel({
   room: RoomDetail
   viewerState: ViewerRoomState | undefined
   menuItems: { id: string; label: string; tokenAmount: number }[]
-  privateRequestStatus: 'IDLE' | 'PENDING' | 'ACCEPTED' | 'DECLINED'
-  setPrivateRequestStatus: (status: 'IDLE' | 'PENDING' | 'ACCEPTED' | 'DECLINED') => void
+  privateRequestStatus: 'IDLE' | 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'ACTIVE'
+  setPrivateRequestStatus: (status: 'IDLE' | 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'ACTIVE') => void
 }) {
   const qc = useQueryClient()
   const navigate = useNavigate()

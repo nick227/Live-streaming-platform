@@ -3,6 +3,80 @@ import { db } from '@streamyolo/db'
 import { createHash } from 'crypto'
 
 export class PaymentService {
+  async createCheckout(userId: string, tokenPackId: string) {
+    const settings = await db.platformSettings.findUnique({ where: { id: 'singleton' } })
+    const tokenPurchasesEnabled = settings?.tokenPurchasesEnabled ?? true
+    if (!tokenPurchasesEnabled) throw httpError(403, 'Token purchases are currently disabled')
+
+    const provider = settings?.activePaymentProvider ?? 'DEMO'
+
+    if (provider === 'CCBILL') {
+      const ccbillResult = await this.createCcbillCheckout(userId, tokenPackId)
+      return {
+        status: 'PENDING',
+        checkoutUrl: ccbillResult.checkoutUrl,
+        tokensCredited: null,
+      }
+    }
+
+    return this.createDemoCheckout(userId, tokenPackId)
+  }
+
+  async createDemoCheckout(userId: string, tokenPackId: string) {
+    const pack = await db.tokenPack.findUnique({ where: { id: tokenPackId } })
+    if (!pack || !pack.isActive) throw httpError(404, 'Token pack not found')
+
+    const tokensToCredit = pack.tokenAmount + pack.bonusTokenAmount
+
+    const result = await db.$transaction(async (tx: any) => {
+      const txn = await tx.paymentTransaction.create({
+        data: {
+          userId,
+          tokenPackId,
+          provider: 'DEMO',
+          status: 'APPROVED',
+          amountCents: pack.priceCents,
+          currency: pack.currency,
+          tokensCredited: tokensToCredit,
+          approvedAt: new Date(),
+        },
+      })
+
+      const wallet = await tx.wallet.upsert({
+        where: { userId },
+        create: {
+          userId,
+          tokenBalance: tokensToCredit,
+          lifetimePurchasedTokens: tokensToCredit,
+        },
+        update: {
+          tokenBalance: { increment: tokensToCredit },
+          lifetimePurchasedTokens: { increment: tokensToCredit },
+        },
+      })
+
+      await tx.ledgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          userId,
+          type: 'DEMO_TOKEN_GRANT',
+          amountTokens: tokensToCredit,
+          balanceAfter: wallet.tokenBalance,
+          paymentTransactionId: txn.id,
+          description: `Demo token purchase: ${pack.name}`,
+        },
+      })
+
+      return txn
+    })
+
+    return {
+      status: 'APPROVED',
+      checkoutUrl: null,
+      tokensCredited: result.tokensCredited,
+    }
+  }
+
   async createCcbillCheckout(userId: string, tokenPackId: string) {
     const clientAccNum = process.env.CCBILL_CLIENT_ACCOUNT_NUM ?? ''
     const clientSubNum = process.env.CCBILL_CLIENT_SUB_ACCOUNT_NUM ?? ''

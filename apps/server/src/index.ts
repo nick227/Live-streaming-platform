@@ -70,6 +70,12 @@ async function main() {
 
   await server.ready()
 
+  // Start sweep jobs
+  setInterval(() => {
+    PrivateSessionService.expireStaleRequested().catch(console.error)
+    PrivateSessionService.expireStaleActive().catch(console.error)
+  }, 60 * 1000)
+
   const port = Number(process.env.PORT ?? 3001)
   server.listen({ port, host: '0.0.0.0' }, (err) => {
     if (err) {

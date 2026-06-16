@@ -1,6 +1,13 @@
 import { useMutation } from '@tanstack/react-query'
 import { getApiClient, unwrap } from '../client'
 
+export function useCreateCheckout() {
+  return useMutation({
+    mutationFn: async (body: { tokenPackId: string }) =>
+      unwrap(await getApiClient().POST('/payments/checkout', { body })),
+  })
+}
+
 export function useCreateCcbillCheckout() {
   return useMutation({
     mutationFn: async (body: { tokenPackId: string }) =>

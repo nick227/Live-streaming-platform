@@ -180,7 +180,12 @@ export class AdminService {
     const hasMore = ledger.length > limit
     if (hasMore) ledger.pop()
 
-    const nextCursor = hasMore ? encodeCursor({ id: ledger[ledger.length - 1].id }) : null
+    const nextCursor = hasMore && ledger.length
+      ? encodeCursor({
+          createdAt: ledger[ledger.length - 1].createdAt.toISOString(),
+          id: ledger[ledger.length - 1].id,
+        })
+      : null
 
     return { wallet, ledger, meta: { hasMore, nextCursor } }
   }
@@ -604,28 +609,36 @@ export class AdminService {
     }
     return {
       activePaymentProvider: settings.activePaymentProvider,
-      tokenPurchasesEnabled: true,
+      tokenPurchasesEnabled: settings.tokenPurchasesEnabled,
     }
   }
 
-  async updateSettings(adminId: string, provider: 'CCBILL' | 'DEMO') {
+  async updateSettings(adminId: string, provider: 'CCBILL' | 'DEMO', tokenPurchasesEnabled?: boolean) {
+    if (
+      process.env.NODE_ENV === 'production' &&
+      provider === 'DEMO' &&
+      process.env.ALLOW_DEMO_PAYMENTS_IN_PRODUCTION !== 'true'
+    ) {
+      throw httpError(400, 'DEMO payments are disabled in production')
+    }
+
     let settings = await db.platformSettings.findUnique({ where: { id: 'singleton' } })
+    const data: any = { activePaymentProvider: provider }
+    if (tokenPurchasesEnabled !== undefined) data.tokenPurchasesEnabled = tokenPurchasesEnabled
+
     if (!settings) {
-      settings = await db.platformSettings.create({ data: { id: 'singleton', activePaymentProvider: provider } })
+      settings = await db.platformSettings.create({ data: { id: 'singleton', ...data } })
     } else {
-      settings = await db.platformSettings.update({
-        where: { id: 'singleton' },
-        data: { activePaymentProvider: provider },
-      })
+      settings = await db.platformSettings.update({ where: { id: 'singleton' }, data })
     }
 
     await db.adminAction.create({
-      data: { adminUserId: adminId, type: 'PAYMENT_PROVIDER_CHANGED', metadataJson: { to: provider } },
+      data: { adminUserId: adminId, type: 'PAYMENT_PROVIDER_CHANGED', metadataJson: { to: provider, tokenPurchasesEnabled } },
     })
 
     return {
       activePaymentProvider: settings.activePaymentProvider,
-      tokenPurchasesEnabled: true,
+      tokenPurchasesEnabled: settings.tokenPurchasesEnabled,
     }
   }
 

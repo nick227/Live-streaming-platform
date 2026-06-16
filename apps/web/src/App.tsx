@@ -34,6 +34,7 @@ import {
   AdminUserPage,
   AdminUsersPage,
   AdminWalletPage,
+  ActivePrivateSessionPage,
   CaptureRoomThumbnailPage,
   CompleteTipPage,
   CreateCcbillCheckoutPage,
@@ -117,6 +118,7 @@ export function App() {
           <Route path="/creator/private-sessions/:sessionId/decline" element={<DeclinePrivateSessionPage />} />
           <Route path="/private-sessions/:sessionId/start" element={<StartPrivateSessionPage />} />
           <Route path="/private-sessions/:sessionId/end" element={<EndPrivateSessionPage />} />
+          <Route path="/private-sessions/:sessionId/active" element={<ActivePrivateSessionPage />} />
           <Route path="/media/upload" element={<UploadMediaPage />} />
           <Route path="/rooms/:roomId/thumbnail/capture" element={<CaptureRoomThumbnailPage />} />
           <Route path="/creator/earnings" element={<CreatorEarningsPage />} />

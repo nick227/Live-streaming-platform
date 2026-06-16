@@ -28,6 +28,7 @@ export class PrivateSessionService {
     const ratePerMin = creator.privateRateTokensPerMinute
     const minMinutes = creator.minPrivateMinutes
     const minCost = ratePerMin * minMinutes
+    const MAX_SESSION_MINUTES = 30
 
     // Check no active session already
     const activeSession = await db.privateSession.findFirst({
@@ -42,6 +43,14 @@ export class PrivateSessionService {
       const wallet = await tx.wallet.findUnique({ where: { userId: viewerId } })
       if (!wallet) throw httpError(400, 'Wallet not found')
 
+      const maxAffordableMinutes = Math.floor(wallet.tokenBalance / ratePerMin)
+      if (maxAffordableMinutes < minMinutes) {
+        throw httpError(400, `Insufficient tokens — minimum cost is ${minCost}`)
+      }
+
+      const affordableMinutes = Math.min(maxAffordableMinutes, MAX_SESSION_MINUTES)
+      const reservedTokens = affordableMinutes * ratePerMin
+
       const session = await tx.privateSession.create({
         data: {
           creatorId: creator.id,
@@ -53,19 +62,19 @@ export class PrivateSessionService {
           viewerCamRequired: creator.privateViewerCamRequired,
           screenShareAllowed: creator.privateScreenShareAllowed,
           rulesText: creator.privateRulesText,
-          reservedTokens: minCost,
+          reservedTokens,
         },
       })
 
       const hold = await tx.wallet.updateMany({
-        where: { userId: viewerId, tokenBalance: { gte: minCost } },
+        where: { userId: viewerId, tokenBalance: { gte: reservedTokens } },
         data: {
-          tokenBalance: { decrement: minCost },
-          reservedTokenBalance: { increment: minCost },
+          tokenBalance: { decrement: reservedTokens },
+          reservedTokenBalance: { increment: reservedTokens },
         },
       })
       if (hold.count !== 1) {
-        throw httpError(400, `Insufficient tokens — minimum cost is ${minCost}`)
+        throw httpError(400, `Insufficient tokens`)
       }
 
       const updatedWallet = await tx.wallet.findUniqueOrThrow({ where: { userId: viewerId } })
@@ -75,10 +84,10 @@ export class PrivateSessionService {
           walletId: wallet.id,
           userId: viewerId,
           type: 'PRIVATE_SESSION_HOLD',
-          amountTokens: -minCost,
+          amountTokens: -reservedTokens,
           balanceAfter: updatedWallet.tokenBalance,
           privateSessionId: session.id,
-          description: 'Private session hold',
+          description: `Private session hold (up to ${affordableMinutes} min)`,
         },
       })
 
@@ -154,30 +163,36 @@ export class PrivateSessionService {
       include: { creator: true },
     })
     if (!session) throw httpError(404, 'Session not found')
-    if (session.status !== 'ACCEPTED') {
-      throw httpError(400, 'Session must be ACCEPTED before starting')
-    }
-
+    
     const isCreator = session.creator.userId === userId
     const isViewer = session.viewerId === userId
     if (!isCreator && !isViewer) throw httpError(403, 'Forbidden')
 
-    const livekitRoomName = `private-${nanoid(16)}`
-    try {
-      await liveKit.createRoom(livekitRoomName)
-    } catch (err) {
-      throw httpError(502, 'Failed to create video room — please try again')
-    }
+    let updated = session
+    if (session.status === 'ACCEPTED') {
+      const livekitRoomName = `private-${nanoid(16)}`
+      try {
+        await liveKit.createRoom(livekitRoomName)
+      } catch (err) {
+        throw httpError(502, 'Failed to create video room — please try again')
+      }
 
-    let updated
-    try {
-      updated = await db.privateSession.update({
-        where: { id: sessionId },
-        data: { status: 'ACTIVE', startedAt: new Date(), livekitRoomName },
-      })
-    } catch (err) {
-      await liveKit.deleteRoom(livekitRoomName)
-      throw err
+      const startedAt = new Date()
+      // Calculate max minutes based on reserved tokens
+      const maxMinutes = session.reservedTokens / session.rateTokensPerMinute
+      const hardEndAt = new Date(startedAt.getTime() + maxMinutes * 60000)
+
+      try {
+        updated = await db.privateSession.update({
+          where: { id: sessionId },
+          data: { status: 'ACTIVE', startedAt, hardEndAt, livekitRoomName },
+        }) as any
+      } catch (err) {
+        await liveKit.deleteRoom(livekitRoomName)
+        throw err
+      }
+    } else if (session.status !== 'ACTIVE') {
+      throw httpError(400, 'Session is not active or accepted')
     }
 
     const at = await liveKit.getToken(userId, {
@@ -203,14 +218,34 @@ export class PrivateSessionService {
     const isViewer = session.viewerId === userId
     if (!isCreator && !isViewer) throw httpError(403, 'Forbidden')
 
-    if (!session.startedAt) throw httpError(400, 'Session not started')
+    if (!session.startedAt || !session.hardEndAt) throw httpError(400, 'Session not started')
 
-    const elapsedMs = Date.now() - session.startedAt.getTime()
-    const elapsedMinutes = Math.ceil(elapsedMs / 60000)
-    const actualMinutes = Math.max(elapsedMinutes, session.minMinutes)
-    const capturedTokens = actualMinutes * session.rateTokensPerMinute
-    const capped = Math.min(capturedTokens, session.reservedTokens)
-    const released = session.reservedTokens - capped
+    if (session.status === 'ENDED' || session.status === 'FORCE_ENDED' || session.status === 'EXPIRED') {
+      const viewerWallet = await db.wallet.findUnique({ where: { userId: session.viewerId } })
+      return {
+        privateSession: formatSession(session),
+        wallet: viewerWallet ? {
+          tokenBalance: viewerWallet.tokenBalance,
+          reservedTokenBalance: viewerWallet.reservedTokenBalance,
+          lifetimePurchasedTokens: viewerWallet.lifetimePurchasedTokens,
+          lifetimeSpentTokens: viewerWallet.lifetimeSpentTokens,
+        } : undefined,
+      }
+    }
+
+    const now = Date.now()
+    const hardEndMs = session.hardEndAt.getTime()
+    const startMs = session.startedAt.getTime()
+
+    const elapsedMs = Math.min(now, hardEndMs) - startMs
+    let elapsedMinutes = Math.ceil(elapsedMs / 60000)
+    // Enforce minMinutes
+    elapsedMinutes = Math.max(elapsedMinutes, session.minMinutes)
+
+    const tokensDue = Math.min(session.reservedTokens, elapsedMinutes * session.rateTokensPerMinute)
+    const capture = tokensDue - session.capturedTokens
+    const release = session.reservedTokens - tokensDue
+    const capped = capture // using 'capped' as the local capture amount to match existing code
 
     const viewerWallet = await db.wallet.findUniqueOrThrow({ where: { userId: session.viewerId } })
     const creatorWallet = await db.wallet.upsert({
@@ -226,7 +261,8 @@ export class PrivateSessionService {
           status: 'ENDED',
           endedAt: new Date(),
           capturedTokens: capped,
-          releasedTokens: released,
+          releasedTokens: release,
+          endedReason: 'User ended session',
         },
       })
 
@@ -234,35 +270,21 @@ export class PrivateSessionService {
         where: { userId: session.viewerId },
         data: {
           reservedTokenBalance: { decrement: session.reservedTokens },
-          tokenBalance: { increment: released },
+          tokenBalance: { increment: release },
           lifetimeSpentTokens: { increment: capped },
         },
       })
 
-      if (capped > 0) {
-        await tx.ledgerEntry.create({
-          data: {
-            walletId: viewerWallet.id,
-            userId: session.viewerId,
-            type: 'PRIVATE_SESSION_CAPTURE',
-            amountTokens: -capped,
-            balanceAfter: newViewerWallet.tokenBalance,
-            privateSessionId: sessionId,
-            description: `Private session — ${actualMinutes} min captured`,
-          },
-        })
-      }
-
-      if (released > 0) {
+      if (release > 0) {
         await tx.ledgerEntry.create({
           data: {
             walletId: viewerWallet.id,
             userId: session.viewerId,
             type: 'PRIVATE_SESSION_RELEASE',
-            amountTokens: released,
+            amountTokens: release,
             balanceAfter: newViewerWallet.tokenBalance,
             privateSessionId: sessionId,
-            description: 'Private session hold released (partial)',
+            description: `Private session hold released (unused ${release} tokens)`,
           },
         })
       }
@@ -278,7 +300,7 @@ export class PrivateSessionService {
           data: {
             walletId: creatorWallet.id,
             userId: session.creator.userId,
-            type: 'PRIVATE_SESSION_CAPTURE',
+            type: 'PRIVATE_SESSION_EARNED',
             amountTokens: capped,
             balanceAfter: newCreatorBalance,
             privateSessionId: sessionId,
@@ -349,6 +371,77 @@ export class PrivateSessionService {
     }
   }
 
+  static async expireStaleActive() {
+    const now = new Date()
+    // Find active sessions that have passed their hardEndAt by at least 1 minute grace period
+    const cutoff = new Date(now.getTime() - 60000)
+    
+    const stale = await db.privateSession.findMany({
+      where: { status: 'ACTIVE', hardEndAt: { lt: cutoff } },
+      include: { creator: true, viewer: { select: { wallet: true } } },
+    })
+
+    for (const session of stale) {
+      if (!session.viewer.wallet || session.reservedTokens <= 0) continue
+
+      const capture = session.reservedTokens - session.capturedTokens
+      if (capture <= 0) continue // already fully captured?
+
+      try {
+        await db.$transaction(async (tx: any) => {
+          await tx.privateSession.update({
+            where: { id: session.id },
+            data: { 
+              status: 'FORCE_ENDED', 
+              endedAt: now, 
+              capturedTokens: session.reservedTokens,
+              releasedTokens: 0,
+              endedReason: 'System auto-closed (time limit reached)',
+            },
+          })
+
+          const newViewerWallet = await tx.wallet.update({
+            where: { userId: session.viewerId },
+            data: {
+              reservedTokenBalance: { decrement: session.reservedTokens },
+              lifetimeSpentTokens: { increment: capture },
+            },
+          })
+
+          const creatorWallet = await tx.wallet.upsert({
+            where: { userId: session.creator.userId },
+            create: { userId: session.creator.userId },
+            update: {},
+          })
+
+          const newCreatorBalance = creatorWallet.tokenBalance + capture
+          await tx.wallet.update({
+            where: { userId: session.creator.userId },
+            data: { tokenBalance: { increment: capture } },
+          })
+
+          await tx.ledgerEntry.create({
+            data: {
+              walletId: creatorWallet.id,
+              userId: session.creator.userId,
+              type: 'PRIVATE_SESSION_EARNED',
+              amountTokens: capture,
+              balanceAfter: newCreatorBalance,
+              privateSessionId: session.id,
+              description: 'Private session earnings (auto-closed)',
+            },
+          })
+        })
+
+        if (session.livekitRoomName) {
+          await liveKit.deleteRoom(session.livekitRoomName).catch(() => {})
+        }
+      } catch (err) {
+        console.error(`[PrivateSessionService] Failed to auto-close stale session ${session.id}:`, err)
+      }
+    }
+  }
+
   private async _assertCreatorOwnsSession(creatorUserId: string, sessionId: string) {
     const session = await db.privateSession.findUnique({
       where: { id: sessionId },
@@ -379,7 +472,9 @@ export function formatSession(session: any) {
     requestedAt: session.requestedAt.toISOString(),
     acceptedAt: session.acceptedAt?.toISOString() ?? null,
     startedAt: session.startedAt?.toISOString() ?? null,
+    hardEndAt: session.hardEndAt?.toISOString() ?? null,
     endedAt: session.endedAt?.toISOString() ?? null,
+    endedReason: session.endedReason ?? null,
     declineReason: session.declineReason ?? null,
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),

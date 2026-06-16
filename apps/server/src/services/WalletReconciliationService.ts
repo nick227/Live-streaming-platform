@@ -1,6 +1,7 @@
 import { db } from '@streamyolo/db'
 
 const RESERVED_SESSION_STATUSES = ['REQUESTED', 'ACCEPTED', 'ACTIVE'] as const
+const RESERVED_SESSION_STATUS_FILTER = [...RESERVED_SESSION_STATUSES]
 
 export interface WalletReconciliationIssue {
   userId: string
@@ -25,36 +26,41 @@ export interface WalletReconciliationReport {
 
 export class WalletReconciliationService {
   async check(): Promise<WalletReconciliationReport> {
-    const wallets = await db.wallet.findMany({
-      include: {
-        user: { select: { id: true, username: true, email: true } },
-        ledgerEntries: {
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          take: 1,
+    const [wallets, ledgerSums, reservedSums] = await Promise.all([
+      db.wallet.findMany({
+        include: {
+          user: { select: { username: true, email: true } },
+          ledgerEntries: {
+            select: { balanceAfter: true },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+          },
         },
-      },
-      orderBy: { createdAt: 'asc' },
-    })
+        orderBy: { createdAt: 'asc' },
+      }),
+      db.ledgerEntry.groupBy({
+        by: ['walletId'],
+        _sum: { amountTokens: true },
+      }),
+      db.privateSession.groupBy({
+        by: ['viewerId'],
+        where: { status: { in: RESERVED_SESSION_STATUS_FILTER } },
+        _sum: { reservedTokens: true },
+      }),
+    ])
+
+    const ledgerSumByWalletId = new Map(
+      ledgerSums.map((entry) => [entry.walletId, entry._sum.amountTokens ?? 0]),
+    )
+    const reservedSumByUserId = new Map(
+      reservedSums.map((entry) => [entry.viewerId, entry._sum.reservedTokens ?? 0]),
+    )
 
     const issues: WalletReconciliationIssue[] = []
 
     for (const wallet of wallets) {
-      const [ledgerSum, reservedSum] = await Promise.all([
-        db.ledgerEntry.aggregate({
-          where: { walletId: wallet.id },
-          _sum: { amountTokens: true },
-        }),
-        db.privateSession.aggregate({
-          where: {
-            viewerId: wallet.userId,
-            status: { in: [...RESERVED_SESSION_STATUSES] },
-          },
-          _sum: { reservedTokens: true },
-        }),
-      ])
-
-      const ledgerSumTokenBalance = ledgerSum._sum.amountTokens ?? 0
-      const activeReservedTokenBalance = reservedSum._sum.reservedTokens ?? 0
+      const ledgerSumTokenBalance = ledgerSumByWalletId.get(wallet.id) ?? 0
+      const activeReservedTokenBalance = reservedSumByUserId.get(wallet.userId) ?? 0
       const latestLedgerBalanceAfter = wallet.ledgerEntries[0]?.balanceAfter ?? null
       const tokenBalanceDeltaFromLedgerSum = wallet.tokenBalance - ledgerSumTokenBalance
       const tokenBalanceDeltaFromLatestLedger =

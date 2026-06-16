@@ -1,9 +1,11 @@
 import { AdminService } from '../services/AdminService'
+import { WalletReconciliationService } from '../services/WalletReconciliationService'
 import { formatReport } from '../services/ReportService'
 import { CREATOR_INCLUDE, formatRoom } from '../services/RoomService'
 import { db } from '@streamyolo/db'
 
 const adminService = new AdminService()
+const reconciliationService = new WalletReconciliationService()
 
 // ── Formatters ──────────────────────────────────────────────────────────────
 
@@ -370,13 +372,39 @@ export async function getAdminSettings(_request: any, reply: any) {
 }
 
 export async function updateAdminSettings(request: any, reply: any) {
-  const result = await adminService.updateSettings(request.user.id, request.body.activePaymentProvider)
+  const result = await adminService.updateSettings(
+    request.user.id,
+    request.body.activePaymentProvider,
+    request.body.tokenPurchasesEnabled,
+  )
   return reply.send(result)
 }
 
 export async function updatePlatformSettings(request: any, reply: any) {
-  const result = await adminService.updateSettings(request.user.id, request.body.activePaymentProvider)
+  const result = await adminService.updateSettings(
+    request.user.id,
+    request.body.activePaymentProvider,
+    request.body.tokenPurchasesEnabled,
+  )
   return reply.send(result)
+}
+
+// ── Wallet reconciliation ─────────────────────────────────────────────────────
+
+export async function adminReconcileWallets(_request: any, reply: any) {
+  const report = await reconciliationService.check()
+  return reply.send({
+    ok: true,
+    checkedWallets: report.checkedWallets,
+    discrepancies: report.issues.map((issue) => ({
+      userId: issue.userId,
+      walletId: issue.walletId,
+      expectedTokenBalance: issue.ledgerSumTokenBalance,
+      actualTokenBalance: issue.storedTokenBalance,
+      expectedReservedTokenBalance: issue.activeReservedTokenBalance,
+      actualReservedTokenBalance: issue.storedReservedTokenBalance,
+    })),
+  })
 }
 
 // ── Wallet ────────────────────────────────────────────────────────────────────
