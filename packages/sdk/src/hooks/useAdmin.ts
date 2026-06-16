@@ -270,6 +270,13 @@ export function useAdminAdjustWallet() {
   })
 }
 
+export function useAdminReconcileWallets() {
+  return useMutation({
+    mutationFn: async () =>
+      unwrap(await (getApiClient() as any).POST('/admin/wallets/reconcile', { body: undefined })),
+  })
+}
+
 // ── Private sessions ──────────────────────────────────────────────────────────
 
 export function useAdminPrivateSessions(params?: { cursor?: string; limit?: number; status?: string }) {
@@ -472,7 +479,7 @@ export function useAdminSettings() {
 export function useUpdateAdminSettings() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (body: { activePaymentProvider: 'CCBILL' | 'DEMO' }) =>
+    mutationFn: async (body: { activePaymentProvider: 'CCBILL' | 'DEMO'; tokenPurchasesEnabled?: boolean }) =>
       unwrap(
         await getApiClient().PATCH('/admin/settings', {
           body: body as any,
