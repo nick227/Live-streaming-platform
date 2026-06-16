@@ -20,7 +20,7 @@ type ChatMessageListProps = {
 }
 
 function defaultEmptyMessage(variant: 'viewer' | 'studio') {
-  return variant === 'studio' ? 'No events yet…' : 'No messages yet. Say hello!'
+  return variant === 'studio' ? 'No chat yet…' : 'No messages yet. Say hello!'
 }
 
 function isVipUser(userId: string | undefined, vipUserIds?: ReadonlySet<string>) {

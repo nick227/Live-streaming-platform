@@ -7,6 +7,13 @@ import type { RoomEvent } from '../model/types'
 import { ChatUsername } from './ChatUsername'
 import { EVENT_TYPE_STYLES } from './eventTypeStyles'
 
+function studioBadgeLabel(type: RoomEvent['type']) {
+  if (type === 'tip') return 'tips'
+  if (type === 'moderation') return 'mod'
+  if (type === 'system') return 'notice'
+  return 'chat'
+}
+
 function viewerRowClassName(type: RoomEvent['type']) {
   if (type === 'tip') return 'border-l-2 border-l-amber-500 bg-amber-500/10 border-amber-500/20'
   if (type === 'moderation') return 'bg-destructive/10 border-destructive/30'
@@ -34,6 +41,7 @@ export function ChatMessageRow({
 
   if (variant === 'studio') {
     const typeKey = getEventFilter(event).toLowerCase()
+    const badgeLabel = studioBadgeLabel(event.type)
     const typeStyle = EVENT_TYPE_STYLES[typeKey] ?? EVENT_TYPE_STYLES.chat
 
     return (
@@ -46,7 +54,7 @@ export function ChatMessageRow({
         )}
       >
         <span className={cn('mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide', typeStyle)}>
-          {typeKey}
+          {badgeLabel}
         </span>
 
         <div className="flex-1 min-w-0">

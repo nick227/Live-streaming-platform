@@ -55,11 +55,11 @@ import { MAX_ROOM_TAGS } from '@streamyolo/shared/room-taxonomy'
 import type { RoomCategory } from '@streamyolo/shared/room-taxonomy'
 
 const privatePresets = [
-  { label: '5 min - 60 / min', value: '5:60', minPrivateMinutes: 5, privateRateTokensPerMinute: 60 },
-  { label: '5 min - 90 / min', value: '5:90', minPrivateMinutes: 5, privateRateTokensPerMinute: 90 },
-  { label: '10 min - 60 / min', value: '10:60', minPrivateMinutes: 10, privateRateTokensPerMinute: 60 },
-  { label: '10 min - 120 / min', value: '10:120', minPrivateMinutes: 10, privateRateTokensPerMinute: 120 },
-  { label: '15 min - 150 / min', value: '15:150', minPrivateMinutes: 15, privateRateTokensPerMinute: 150 },
+  { label: '5 min - 60 tokens', value: '5:60', minPrivateMinutes: 5, privateRateTokensPerMinute: 60 },
+  { label: '5 min - 90 / tokens', value: '5:90', minPrivateMinutes: 5, privateRateTokensPerMinute: 90 },
+  { label: '10 min - 60 / tokens', value: '10:60', minPrivateMinutes: 10, privateRateTokensPerMinute: 60 },
+  { label: '10 min - 120 / tokens', value: '10:120', minPrivateMinutes: 10, privateRateTokensPerMinute: 120 },
+  { label: '15 min - 150 / tokens', value: '15:150', minPrivateMinutes: 15, privateRateTokensPerMinute: 150 },
 ]
 
 type SelectOption = {
@@ -219,12 +219,10 @@ function LocalPreview({ isFullscreen }: { isFullscreen: boolean }) {
 // ─── PublishedTracks ──────────────────────────────────────────────────────────
 
 function PublishedTracks({
-  isPrivate,
   isMuted,
   isVideoOff,
   isFullscreen,
 }: {
-  isPrivate: boolean
   isMuted: boolean
   isVideoOff: boolean
   isFullscreen: boolean
@@ -242,6 +240,11 @@ function PublishedTracks({
 
   return (
     <div className={cn('relative bg-black', isFullscreen ? 'w-full h-full' : 'w-full aspect-video')}>
+      {tracks.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
+          Camera connecting...
+        </div>
+      )}
       {tracks.map((trackRef) =>
         trackRef.publication.kind === 'video' ? (
           <VideoTrack
@@ -254,11 +257,6 @@ function PublishedTracks({
           />
         ) : null,
       )}
-      {isPrivate && (
-        <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-purple-700/90 text-white text-xs font-bold px-2.5 py-1 rounded-full backdrop-blur-sm pointer-events-none">
-          <Lock className="h-3 w-3" /> PRIVATE
-        </div>
-      )}
     </div>
   )
 }
@@ -268,7 +266,6 @@ function PublishedTracks({
 function LiveBroadcast({
   token,
   serverUrl,
-  isPrivate,
   onDisconnect,
   isMuted,
   isVideoOff,
@@ -276,7 +273,6 @@ function LiveBroadcast({
 }: {
   token: string
   serverUrl: string
-  isPrivate: boolean
   onDisconnect: () => void
   isMuted: boolean
   isVideoOff: boolean
@@ -292,7 +288,6 @@ function LiveBroadcast({
       className={cn('bg-black', isFullscreen ? 'w-full h-full' : 'w-full aspect-video')}
     >
       <PublishedTracks
-        isPrivate={isPrivate}
         isMuted={isMuted}
         isVideoOff={isVideoOff}
         isFullscreen={isFullscreen}
@@ -303,7 +298,7 @@ function LiveBroadcast({
 
 // ─── StateBadge ───────────────────────────────────────────────────────────────
 
-function StateBadge({ state, isPrivate }: { state: BroadcastState; isPrivate: boolean }) {
+function StateBadge({ state }: { state: BroadcastState }) {
   if (state === 'STARTING') {
     return (
       <span className="flex items-center gap-1.5 bg-black/60 text-white/80 text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm">
@@ -316,13 +311,6 @@ function StateBadge({ state, isPrivate }: { state: BroadcastState; isPrivate: bo
     return (
       <span className="flex items-center gap-1.5 bg-black/60 text-white/70 text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm uppercase tracking-wider">
         Preview
-      </span>
-    )
-  }
-  if (isPrivate) {
-    return (
-      <span className="flex items-center gap-1.5 bg-purple-700/90 text-white text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm">
-        <Lock className="h-3 w-3" /> Private
       </span>
     )
   }
@@ -375,7 +363,6 @@ interface VideoContainerProps {
   livekitUrl: string | null
   isMuted: boolean
   isVideoOff: boolean
-  isPrivate: boolean
   containerRef: React.RefObject<HTMLDivElement>
   onToggleMute: () => void
   onToggleVideo: () => void
@@ -396,7 +383,6 @@ function VideoContainer({
   livekitUrl,
   isMuted,
   isVideoOff,
-  isPrivate,
   containerRef,
   onToggleMute,
   onToggleVideo,
@@ -471,10 +457,8 @@ function VideoContainer({
         <LocalPreview isFullscreen={isFullscreen} />
       ) : livekitToken && livekitUrl ? (
         <LiveBroadcast
-          key={isPrivate ? 'private' : 'public'}
           token={livekitToken}
           serverUrl={livekitUrl}
-          isPrivate={isPrivate}
           onDisconnect={onDisconnect}
           isMuted={isMuted}
           isVideoOff={isVideoOff}
@@ -491,7 +475,7 @@ function VideoContainer({
       >
         {/* Top bar */}
         <div className="flex items-start justify-between p-3 pointer-events-auto">
-          <StateBadge state={state} isPrivate={isPrivate} />
+          <StateBadge state={state} />
           <div className="flex items-center gap-1 rounded-full bg-black/50 p-1 text-white backdrop-blur-sm">
             <span className="flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold tabular-nums">
               <Users className="h-3.5 w-3.5" />
@@ -590,7 +574,7 @@ export function GoLivePage() {
   const [currentPrivateSession, setCurrentPrivateSession] = useState<any | null>(null)
   const [privateStartedAt, setPrivateStartedAt] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
-  const [eventFilter, setEventFilter] = useState<EventFilter>('ALL')
+  const [eventFilter, setEventFilter] = useState<EventFilter>('CHAT')
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoOff, setIsVideoOff] = useState(false)
   const videoContainerRef = useRef<HTMLDivElement>(null)
@@ -965,7 +949,7 @@ export function GoLivePage() {
                 <h1 className="text-lg font-bold leading-tight truncate">{room.title}</h1>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isPrivate
-                    ? 'Private session active — public room paused'
+                    ? 'Private session active'
                     : state === 'LIVE_PUBLIC'
                       ? 'Broadcasting live'
                       : state === 'STARTING'
@@ -986,7 +970,6 @@ export function GoLivePage() {
             livekitUrl={livekitUrl}
             isMuted={isMuted}
             isVideoOff={isVideoOff}
-            isPrivate={isPrivate}
             containerRef={videoContainerRef}
             onToggleMute={() => setIsMuted((m) => !m)}
             onToggleVideo={() => setIsVideoOff((v) => !v)}
@@ -1018,7 +1001,7 @@ export function GoLivePage() {
                 <div className="grid gap-2 sm:grid-cols-3">
                   <LabeledSelect
                     id="category"
-                    label="Category"
+                    label=""
                     value={editCategory}
                     options={taxonomy?.categories.map((c) => ({ label: c.label, value: c.value })) ?? []}
                     onChange={handleCategoryChange}
@@ -1026,14 +1009,14 @@ export function GoLivePage() {
                   />
                   <LabeledSelect
                     id="countryCode"
-                    label="Country"
+                    label=""
                     value={editCountryCode}
                     options={taxonomy?.countries.map((c) => ({ label: c.name, value: c.code })) ?? []}
                     onChange={handleCountryChange}
                     placeholder="Select"
                   />
                   <MultiSelectDropdown
-                    label={`Tags ${editTagSlugs.length}/${MAX_ROOM_TAGS}`}
+                    label=""
                     options={taxonomy?.tags.map((t) => ({ label: t.label, value: t.slug })) ?? []}
                     selectedValues={editTagSlugs}
                     onToggle={toggleEditTag}
