@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { io, type Socket } from 'socket.io-client'
-import { mergeMessages, upsertMessage, toRoomEvent } from './mergeMessages'
-import type { ChatMessageDto, RoomEvent } from './types'
+import { mergeMessages, upsertMessage, toRoomEvent } from '../model/mergeMessages'
+import type { ChatMessageDto, RoomEvent } from '../model/types'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
 

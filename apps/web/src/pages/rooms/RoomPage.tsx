@@ -7,9 +7,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Users, Coins, Lock } from 'lucide-react'
-import { RoomChatPanel } from '@/components/chat/RoomChatPanel'
-import { useRoomSocket } from '@/components/chat/useRoomSocket'
-import type { ChatMessageDto } from '@/components/chat/types'
+import { ViewerChatPanel, useRoomSocket, type ChatMessageDto } from '@/components/chat'
 import { RoomViewerVideo } from '@/components/rooms/RoomViewerVideo'
 import { ViewerParticipationPanel } from '@/components/rooms/ViewerParticipationPanel'
 
@@ -110,7 +108,7 @@ export function RoomPage() {
       <RoomInfoHeader room={room} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[500px]">
         <div className="lg:col-span-2 min-h-0">
-          <RoomChatPanel
+          <ViewerChatPanel
             messages={messages}
             pinnedMessage={pinnedMessage}
             canChat={viewerState?.canChat ?? true}

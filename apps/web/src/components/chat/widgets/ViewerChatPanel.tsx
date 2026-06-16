@@ -1,8 +1,9 @@
-import { ChatMessageList } from './ChatMessageList'
-import { ChatComposer } from './ChatComposer'
-import type { ChatMessageDto, RoomEvent } from './types'
+import { ChatMessageList } from '../message/ChatMessageList'
+import { ChatComposer } from '../composer/ChatComposer'
+import { PinnedMessageBanner } from '../primitives/PinnedMessageBanner'
+import type { ChatMessageDto, RoomEvent } from '../model/types'
 
-export function RoomChatPanel({
+export function ViewerChatPanel({
   messages,
   pinnedMessage,
   canChat,
@@ -25,12 +26,7 @@ export function RoomChatPanel({
           {connected ? 'Live' : 'Connecting...'}
         </span>
       </div>
-      {pinnedMessage && !pinnedMessage.deletedAt && (
-        <div className="rounded border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
-          <span className="font-medium text-primary">Pinned: </span>
-          <span className="break-words">{pinnedMessage.body}</span>
-        </div>
-      )}
+      {pinnedMessage && <PinnedMessageBanner message={pinnedMessage} variant="viewer" />}
       <ChatMessageList messages={messages} />
       <ChatComposer canChat={canChat} connected={connected} sending={sending} onSend={onSend} />
     </div>

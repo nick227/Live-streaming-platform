@@ -3,14 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useCaptureRoomThumbnail,
-  useCreatorEarnings,
-  useCreatorProfile,
   useRoom,
   useGoLive,
   useEndRoom,
   useEndPrivateSession,
   useGetLivekitToken,
-  useRoomMenu,
   useRoomMessages,
   useCreatorPrivateSessions,
   useAcceptPrivateSession,
@@ -28,29 +25,28 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant } from '@livekit/components-react'
 import { Track } from 'livekit-client'
-import type { LucideIcon } from 'lucide-react'
 import {
-  AlertCircle,
   Camera,
-  CheckCircle2,
   Clock,
-  Coins,
   Lock,
   Maximize2,
   Mic,
   MicOff,
   Minimize2,
-  Target,
-  TrendingUp,
   Users,
   Video,
   VideoOff,
 } from 'lucide-react'
-import { useRoomSocket } from '@/components/chat/useRoomSocket'
+import {
+  CreatorStudioChat,
+  ModerationActionBar,
+  useRoomSocket,
+  userLabel,
+  type ChatMessageDto,
+  type EventFilter,
+  type RoomEvent,
+} from '@/components/chat'
 import { captureVideoFrameAsFormData } from '@/lib/captureVideoFrame'
-import type { ChatMessageDto, RoomEvent } from '@/components/chat/types'
-import { CreatorEventLog, ModerationButtons } from '@/components/chat/CreatorEventLog'
-import type { EventFilter } from '@/components/chat/eventFilter'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -63,18 +59,12 @@ type BroadcastState =
   | 'ENDING'
   | 'ENDED'
 
-type TipRoomEvent = Extract<RoomEvent, { type: 'tip' }>
-
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function formatElapsed(seconds: number) {
   const mins = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${mins}:${secs.toString().padStart(2, '0')}`
-}
-
-function userLabel(user: ChatMessageDto['user']) {
-  return user?.displayName ?? user?.id ?? 'Viewer'
 }
 
 function privateRequestViewer(request: any) {
@@ -287,6 +277,7 @@ interface VideoContainerProps {
   loadingGoLive: boolean
   loadingEnd: boolean
   loadingCapture: boolean
+  viewerCount: number
 }
 
 function VideoContainer({
@@ -306,6 +297,7 @@ function VideoContainer({
   loadingGoLive,
   loadingEnd,
   loadingCapture,
+  viewerCount,
 }: VideoContainerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -389,7 +381,11 @@ function VideoContainer({
         {/* Top bar */}
         <div className="flex items-start justify-between p-3 pointer-events-auto">
           <StateBadge state={state} isPrivate={isPrivate} />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-full bg-black/50 p-1 text-white backdrop-blur-sm">
+            <span className="flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold tabular-nums">
+              <Users className="h-3.5 w-3.5" />
+              {viewerCount}
+            </span>
             <IconControlButton
               onClick={onCaptureThumbnail}
               title="Capture thumbnail"
@@ -462,37 +458,6 @@ function VideoContainer({
   )
 }
 
-// ─── StatChip ─────────────────────────────────────────────────────────────────
-
-function StatChip({
-  icon: Icon,
-  label,
-  value,
-  accent = false,
-}: {
-  icon: LucideIcon
-  label: string
-  value: string | number
-  accent?: boolean
-}) {
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-3 rounded-xl border px-4 py-3 flex-1 min-w-0',
-        accent ? 'border-primary/40 bg-primary/10' : 'border-border bg-card',
-      )}
-    >
-      <Icon className={cn('h-5 w-5 shrink-0', accent ? 'text-primary' : 'text-muted-foreground')} />
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground truncate">
-          {label}
-        </p>
-        <p className="text-base font-bold leading-tight tabular-nums">{value}</p>
-      </div>
-    </div>
-  )
-}
-
 // ─── GoLivePage ───────────────────────────────────────────────────────────────
 
 export function GoLivePage() {
@@ -501,7 +466,6 @@ export function GoLivePage() {
   const { roomId } = useParams<{ roomId: string }>()
   const { data: roomData } = useRoom(roomId!)
   const room = roomData?.data?.room
-  const { data: profileData } = useCreatorProfile()
 
   const [state, setState] = useState<BroadcastState>('PREVIEW_LOCAL')
   const [livekitToken, setLivekitToken] = useState<string | null>(null)
@@ -510,12 +474,6 @@ export function GoLivePage() {
   const [privateStartedAt, setPrivateStartedAt] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
   const [eventFilter, setEventFilter] = useState<EventFilter>('ALL')
-  const [liveGoal, setLiveGoal] = useState<{
-    id: string
-    title: string
-    targetTokens: number
-    currentTokens: number
-  } | undefined>()
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoOff, setIsVideoOff] = useState(false)
   const videoContainerRef = useRef<HTMLDivElement>(null)
@@ -548,12 +506,6 @@ export function GoLivePage() {
     if (payload.reward.type === 'VIP') toast.success('Viewer marked VIP')
     if (payload.reward.type === 'UNVIP') toast.success('Viewer removed from VIP')
   }, [])
-  const onGoalUpdated = useCallback(
-    (payload: { goal: { currentTokens: number; targetTokens: number; title: string; id: string } }) => {
-      setLiveGoal(payload.goal)
-    },
-    [],
-  )
   const onPrivateRequestCreated = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['creator-private-sessions', roomId] })
     toast.info('New private session request')
@@ -571,12 +523,11 @@ export function GoLivePage() {
     () => ({
       onTipCreated,
       onUserRewarded,
-      onGoalUpdated,
       onPrivateRequestCreated,
       onRoomEnded,
       onMessagePinned,
     }),
-    [onTipCreated, onUserRewarded, onGoalUpdated, onPrivateRequestCreated, onRoomEnded, onMessagePinned],
+    [onTipCreated, onUserRewarded, onPrivateRequestCreated, onRoomEnded, onMessagePinned],
   )
   const { messages, viewerCount, pinnedMessage, markMessageDeleted } = useRoomSocket(
     roomId,
@@ -584,24 +535,14 @@ export function GoLivePage() {
     socketCallbacks,
   )
 
-  const { data: roomMenuData } = useRoomMenu(roomId!)
-  const { data: earningsData } = useCreatorEarnings({ limit: 10 })
   const { data: privateReqs } = useCreatorPrivateSessions(roomId!)
 
-  const { activeViewers, pendingRequests, recentTips, roomTokensEarned } = useMemo(() => {
+  const { activeViewers, pendingRequests } = useMemo(() => {
     const viewerMap = new Map<string, any>()
-    const tips: TipRoomEvent[] = []
-    let tokenTotal = 0
 
     for (const event of messages) {
       const user = event.message.user
       if (user?.id) viewerMap.set(user.id, user)
-
-      if (event.type === 'tip') {
-        tokenTotal += event.amountTokens
-        tips.unshift(event)
-        if (tips.length > 5) tips.pop()
-      }
     }
 
     const requests = []
@@ -616,16 +557,8 @@ export function GoLivePage() {
     return {
       activeViewers: Array.from(viewerMap.values()),
       pendingRequests: requests,
-      recentTips: tips,
-      roomTokensEarned: tokenTotal,
     }
   }, [messages, privateReqs?.data])
-  const menuGoal = roomMenuData?.data?.goal
-  useEffect(() => {
-    if (menuGoal) setLiveGoal(menuGoal)
-  }, [menuGoal])
-  const goal = liveGoal ?? menuGoal
-  const pendingEarnings = (earningsData as any)?.data?.pendingTokenBalance ?? 0
   const displayViewerCount = viewerCount ?? room?.viewerCount ?? 0
   const isPrivate = state === 'LIVE_PRIVATE'
 
@@ -789,40 +722,6 @@ export function GoLivePage() {
     return <div className="p-8 text-muted-foreground animate-pulse">Loading studio…</div>
   }
 
-  const profile = (profileData as any)?.data
-  const menuItems: any[] = roomMenuData?.data?.items ?? []
-  const eligibilityChecks = [
-    {
-      label: 'Creator account approved',
-      ok: profile?.status === 'ACTIVE',
-      hint: 'Waiting for admin to approve your creator account',
-      link: null,
-    },
-    {
-      label: 'Room thumbnail',
-      ok: Boolean(room.thumbnailUrl),
-      hint: 'Capture a thumbnail from your camera',
-      link: `/rooms/${roomId}/thumbnail/capture`,
-    },
-    {
-      label: 'Private session rate',
-      ok: (profile?.privateRateTokensPerMinute ?? 0) > 0 && Boolean(profile?.privateRulesText),
-      hint: 'Set your rate and rules in Creator Settings',
-      link: '/creator/profile',
-    },
-    {
-      label: 'Tip menu configured',
-      ok: menuItems.length > 0,
-      hint: 'Add at least one item to your tip menu',
-      link: '/creator/menu-items',
-    },
-  ]
-  const allEligible = eligibilityChecks.every((c) => c.ok)
-
-  const goalPct = goal
-    ? Math.min(100, Math.round((goal.currentTokens / goal.targetTokens) * 100))
-    : 0
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-4 xl:gap-6 items-start">
 
@@ -843,16 +742,6 @@ export function GoLivePage() {
                     : 'Ready to broadcast'}
             </p>
           </div>
-          <div className="flex items-center gap-4 shrink-0 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Users className="h-4 w-4" />
-              <span className="font-semibold text-foreground">{displayViewerCount}</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Coins className="h-4 w-4" />
-              <span className="font-semibold text-foreground">{roomTokensEarned}</span>
-            </span>
-          </div>
         </div>
 
         {/* Thumbnail hint — show when previewing and no thumbnail yet */}
@@ -860,29 +749,6 @@ export function GoLivePage() {
           <p className="text-xs text-muted-foreground">
             No thumbnail yet — use the <Camera className="inline h-3.5 w-3.5" /> button in the video overlay to capture one.
           </p>
-        )}
-
-        {/* Eligibility checklist — show when previewing and not all checks pass */}
-        {state === 'PREVIEW_LOCAL' && !allEligible && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 space-y-2">
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-500/80">Pre-flight Check</p>
-            {eligibilityChecks.map((check) => (
-              <div key={check.label} className="flex items-start gap-2">
-                {check.ok
-                  ? <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                  : <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />}
-                <div className="text-sm flex-1">
-                  <span className={check.ok ? 'text-muted-foreground line-through' : 'text-foreground'}>{check.label}</span>
-                  {!check.ok && check.link && (
-                    <a href={check.link} className="ml-2 text-xs text-amber-400 underline hover:text-amber-300">Fix →</a>
-                  )}
-                  {!check.ok && !check.link && (
-                    <span className="ml-2 text-xs text-muted-foreground">{check.hint}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
         )}
 
         {/* Video with floating controls */}
@@ -903,6 +769,7 @@ export function GoLivePage() {
           loadingGoLive={goLiveMutation.isPending}
           loadingEnd={endMutation.isPending}
           loadingCapture={captureThumbnail.isPending}
+          viewerCount={displayViewerCount}
         />
 
         {/* Private session status bar */}
@@ -945,76 +812,6 @@ export function GoLivePage() {
           </div>
         )}
 
-        {/* Economy */}
-        <div className="rounded-xl border border-border bg-card p-5 space-y-5">
-          <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Studio Economy
-          </h2>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatChip icon={Users} label="Viewers" value={displayViewerCount} />
-            <StatChip
-              icon={Coins}
-              label="Session Tips"
-              value={roomTokensEarned.toLocaleString()}
-              accent={roomTokensEarned > 0}
-            />
-            <StatChip
-              icon={TrendingUp}
-              label="Pending Earnings"
-              value={pendingEarnings.toLocaleString()}
-            />
-            <StatChip
-              icon={Lock}
-              label="Private Reqs"
-              value={pendingRequests.length}
-              accent={pendingRequests.length > 0}
-            />
-          </div>
-
-          {/* Goal bar */}
-          {goal && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Target className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-sm font-semibold">{goal.title}</span>
-                </div>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {goal.currentTokens.toLocaleString()} / {goal.targetTokens.toLocaleString()}
-                </span>
-              </div>
-              <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-700"
-                  style={{ width: `${goalPct}%` }}
-                />
-              </div>
-              <p className="text-right text-[10px] text-muted-foreground">{goalPct}% of goal</p>
-            </div>
-          )}
-
-          {/* Recent tips */}
-          {recentTips.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Recent Tips
-              </p>
-              {recentTips.slice(0, 4).map((tip) => (
-                <div
-                  key={tip.message.id}
-                  className="flex items-center justify-between text-sm px-3 py-1.5 rounded-lg bg-muted/40 border border-transparent hover:border-border transition-colors"
-                >
-                  <span className="text-muted-foreground truncate">{userLabel(tip.message.user)}</span>
-                  <span className="font-bold text-primary ml-3 shrink-0">
-                    +{tip.amountTokens}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Pending private requests */}
         {pendingRequests.length > 0 && (
           <div className="rounded-xl border border-border bg-card p-4 space-y-3">
@@ -1035,7 +832,7 @@ export function GoLivePage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <ModerationButtons
+                  <ModerationActionBar
                     userId={req.viewer?.id ?? req.viewerId}
                     onUserAction={handleUserAction}
                   />
@@ -1056,7 +853,7 @@ export function GoLivePage() {
       {/* ── Right column: chat + viewers ── */}
       <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:h-[calc(100vh-2rem)] xl:overflow-hidden">
         <div className="flex-1 min-h-0 flex flex-col">
-          <CreatorEventLog
+          <CreatorStudioChat
             messages={messages}
             pinnedMessage={pinnedMessage}
             eventFilter={eventFilter}
@@ -1079,7 +876,7 @@ export function GoLivePage() {
                   className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/40 transition-colors"
                 >
                   <span className="text-sm font-medium truncate">{userLabel(viewer)}</span>
-                  <ModerationButtons userId={viewer.id} onUserAction={handleUserAction} />
+                  <ModerationActionBar userId={viewer.id} onUserAction={handleUserAction} />
                 </div>
               ))}
             </div>

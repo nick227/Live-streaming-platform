@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { ChatMessageRow } from './ChatMessageRow'
-import type { RoomEvent } from './types'
+import type { RoomEvent } from '../model/types'
 
 export function ChatMessageList({ messages }: { messages: RoomEvent[] }) {
   const bottomRef = useRef<HTMLDivElement>(null)

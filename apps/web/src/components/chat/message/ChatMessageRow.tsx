@@ -1,10 +1,7 @@
 import { cn } from '@/lib/utils'
-import { formatMessageTime } from './formatMessageTime'
-import type { RoomEvent } from './types'
-
-function displayName(event: RoomEvent) {
-  return event.message.user?.displayName ?? 'System'
-}
+import { displayName } from '../model/display'
+import { formatMessageTime } from '../model/formatMessageTime'
+import type { RoomEvent } from '../model/types'
 
 function rowClassName(type: RoomEvent['type']) {
   if (type === 'tip') return 'bg-amber-500/10 border-amber-500/30'
