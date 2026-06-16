@@ -158,6 +158,124 @@ export class AdminService {
     return user
   }
 
+  async getUserWallet(userId: string, params: { cursor?: string; limit?: number }) {
+    const limit = normalizeLimit(params.limit)
+    const cursorPayload = decodeCursor(params.cursor)
+
+    const wallet = await db.wallet.findUnique({ where: { userId } })
+    if (!wallet) return { wallet: null, ledger: [], meta: { hasMore: false, nextCursor: null } }
+
+    const ledger = await db.ledgerEntry.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(cursorPayload
+        ? {
+            cursor: { id: cursorPayload.id as string },
+            skip: 1,
+          }
+        : {}),
+    })
+
+    const hasMore = ledger.length > limit
+    if (hasMore) ledger.pop()
+
+    const nextCursor = hasMore ? encodeCursor({ id: ledger[ledger.length - 1].id }) : null
+
+    return { wallet, ledger, meta: { hasMore, nextCursor } }
+  }
+
+  async grantTokens(adminId: string, userId: string, amountTokens: number, reason: string) {
+    const result = await db.$transaction(async (tx: any) => {
+      const wallet = await tx.wallet.upsert({
+        where: { userId },
+        create: { userId, tokenBalance: amountTokens, lifetimePurchasedTokens: 0 },
+        update: { tokenBalance: { increment: amountTokens } },
+      })
+
+      await tx.ledgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          userId,
+          type: 'ADMIN_ADJUSTMENT',
+          amountTokens,
+          balanceAfter: wallet.tokenBalance,
+          description: `Admin Grant: ${reason}`,
+        },
+      })
+
+      await tx.adminAction.create({
+        data: { adminUserId: adminId, targetUserId: userId, type: 'GRANT_TOKENS', reason, metadataJson: { amountTokens } },
+      })
+
+      return wallet
+    })
+    return result
+  }
+
+  async revokeTokens(adminId: string, userId: string, amountTokens: number, reason: string) {
+    const result = await db.$transaction(async (tx: any) => {
+      const wallet = await tx.wallet.findUnique({ where: { userId } })
+      if (!wallet) throw httpError(404, 'Wallet not found')
+      if (wallet.tokenBalance < amountTokens) throw httpError(400, 'Cannot revoke more than current balance')
+
+      const updated = await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { tokenBalance: { decrement: amountTokens } },
+      })
+
+      await tx.ledgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          userId,
+          type: 'ADMIN_ADJUSTMENT',
+          amountTokens: -amountTokens,
+          balanceAfter: updated.tokenBalance,
+          description: `Admin Revoke: ${reason}`,
+        },
+      })
+
+      await tx.adminAction.create({
+        data: { adminUserId: adminId, targetUserId: userId, type: 'REVOKE_TOKENS', reason, metadataJson: { amountTokens } },
+      })
+
+      return updated
+    })
+    return result
+  }
+
+  async resetWallet(adminId: string, userId: string, reason: string) {
+    const result = await db.$transaction(async (tx: any) => {
+      let wallet = await tx.wallet.findUnique({ where: { userId } })
+      if (!wallet || wallet.tokenBalance === 0) return wallet
+
+      const removed = wallet.tokenBalance
+
+      wallet = await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { tokenBalance: 0 },
+      })
+
+      await tx.ledgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          userId,
+          type: 'TEST_RESET',
+          amountTokens: -removed,
+          balanceAfter: 0,
+          description: `Admin Reset: ${reason}`,
+        },
+      })
+
+      await tx.adminAction.create({
+        data: { adminUserId: adminId, targetUserId: userId, type: 'RESET_WALLET', reason, metadataJson: { removed } },
+      })
+
+      return wallet
+    })
+    return result
+  }
+
   // ── Creators ───────────────────────────────────────────────────────────────
 
   async listCreators(params: { cursor?: string; limit?: number; status?: string }) {
@@ -474,6 +592,63 @@ export class AdminService {
     const tag = await db.roomTag.findUnique({ where: { id: tagId } })
     if (!tag) throw httpError(404, 'Tag not found')
     await db.roomTag.update({ where: { id: tagId }, data: { isActive: false } })
+    return { ok: true }
+  }
+
+  // ── Settings ───────────────────────────────────────────────────────────────
+
+  async getSettings() {
+    let settings = await db.platformSettings.findUnique({ where: { id: 'singleton' } })
+    if (!settings) {
+      settings = await db.platformSettings.create({ data: { id: 'singleton', activePaymentProvider: 'DEMO' } })
+    }
+    return {
+      activePaymentProvider: settings.activePaymentProvider,
+      tokenPurchasesEnabled: true,
+    }
+  }
+
+  async updateSettings(adminId: string, provider: 'CCBILL' | 'DEMO') {
+    let settings = await db.platformSettings.findUnique({ where: { id: 'singleton' } })
+    if (!settings) {
+      settings = await db.platformSettings.create({ data: { id: 'singleton', activePaymentProvider: provider } })
+    } else {
+      settings = await db.platformSettings.update({
+        where: { id: 'singleton' },
+        data: { activePaymentProvider: provider },
+      })
+    }
+
+    await db.adminAction.create({
+      data: { adminUserId: adminId, type: 'PAYMENT_PROVIDER_CHANGED', metadataJson: { to: provider } },
+    })
+
+    return {
+      activePaymentProvider: settings.activePaymentProvider,
+      tokenPurchasesEnabled: true,
+    }
+  }
+
+  // ── Token Packs ────────────────────────────────────────────────────────────
+
+  async listAllTokenPacks() {
+    return db.tokenPack.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] })
+  }
+
+  async createTokenPack(data: { name: string; priceCents: number; tokenAmount: number; bonusTokenAmount?: number; currency?: string; isActive?: boolean; sortOrder?: number }) {
+    return db.tokenPack.create({ data: { ...data, bonusTokenAmount: data.bonusTokenAmount ?? 0, currency: data.currency ?? 'USD', isActive: data.isActive ?? true, sortOrder: data.sortOrder ?? 0 } })
+  }
+
+  async updateTokenPack(packId: string, data: { name?: string; priceCents?: number; tokenAmount?: number; bonusTokenAmount?: number; isActive?: boolean; sortOrder?: number }) {
+    const pack = await db.tokenPack.findUnique({ where: { id: packId } })
+    if (!pack) throw httpError(404, 'Token pack not found')
+    return db.tokenPack.update({ where: { id: packId }, data })
+  }
+
+  async deleteTokenPack(packId: string) {
+    const pack = await db.tokenPack.findUnique({ where: { id: packId } })
+    if (!pack) throw httpError(404, 'Token pack not found')
+    await db.tokenPack.delete({ where: { id: packId } })
     return { ok: true }
   }
 }

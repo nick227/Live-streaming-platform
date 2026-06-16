@@ -3,9 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { useWallet, useCreateTip, useRequestPrivateSession } from '@streamyolo/sdk'
+import { useWallet, useCreateTip, useRequestPrivateSession, useCreateReport } from '@streamyolo/sdk'
 import { useQueryClient } from '@tanstack/react-query'
-import { Coins, Lock, Star, ChevronRight } from 'lucide-react'
+import { Coins, Flag, Lock, Star, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import type { components } from '@streamyolo/sdk'
 
@@ -33,7 +33,10 @@ export function ViewerParticipationPanel({
   const { mutateAsync: createTip, isPending: isTipping } = useCreateTip()
   const { mutateAsync: requestPrivate, isPending: isRequesting } = useRequestPrivateSession()
 
+  const { mutateAsync: createReport, isPending: isReporting } = useCreateReport()
   const [customTip, setCustomTip] = useState('')
+  const [showReport, setShowReport] = useState(false)
+  const [reportReason, setReportReason] = useState('')
 
   const handleTip = async (amount: number, type: 'GENERAL' | 'MENU_ITEM' | 'CUSTOM', menuItemId?: string) => {
     if (balance < amount) {
@@ -176,18 +179,65 @@ export function ViewerParticipationPanel({
                 {privateRequestStatus === 'DECLINED' && (
                   <p className="text-xs text-destructive text-center font-medium">Request declined</p>
                 )}
-                <Button
-                  className="w-full"
-                  disabled={!canRequest || isRequesting}
-                  onClick={handleRequestPrivate}
-                >
-                  <Lock className="h-4 w-4 mr-2" /> Request Private
+                <Button asChild className="w-full">
+                  <Link to={`/rooms/${room.id}/private-sessions/request`}>
+                    <Lock className="h-4 w-4 mr-2" /> Request Private
+                  </Link>
                 </Button>
               </div>
             )}
           </CardContent>
         </Card>
       )}
+      {/* Report */}
+      <div className="pt-2">
+        {!showReport ? (
+          <button
+            onClick={() => setShowReport(true)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
+          >
+            <Flag className="h-3.5 w-3.5" />
+            Report room
+          </button>
+        ) : (
+          <div className="space-y-2 border rounded-lg p-3">
+            <p className="text-xs font-medium">Report this room</p>
+            <select
+              className="w-full rounded border border-input bg-background px-2 py-1.5 text-xs"
+              value={reportReason}
+              onChange={e => setReportReason(e.target.value)}
+            >
+              <option value="">Select a reason…</option>
+              <option value="SPAM">Spam</option>
+              <option value="HARASSMENT">Harassment</option>
+              <option value="ILLEGAL_CONTENT">Illegal content</option>
+              <option value="UNDERAGE">Suspected underage</option>
+              <option value="OTHER">Other</option>
+            </select>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={!reportReason || isReporting}
+                loading={isReporting}
+                onClick={async () => {
+                  try {
+                    await createReport({ targetType: 'ROOM', targetRoomId: room.id, reason: reportReason })
+                    toast.success('Report submitted')
+                    setShowReport(false)
+                    setReportReason('')
+                  } catch {
+                    toast.error('Failed to submit report')
+                  }
+                }}
+              >
+                Submit
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowReport(false)}>Cancel</Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

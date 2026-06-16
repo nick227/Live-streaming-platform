@@ -23,7 +23,11 @@ import {
   AdminReviewReportPage,
   AdminRoomPage,
   AdminRoomsPage,
+  AdminSettingsPage,
   AdminSuspendCreatorPage,
+  AdminTokenPacksPage,
+  AdminCreateTokenPackPage,
+  AdminEditTokenPackPage,
   AdminSuspendUserPage,
   AdminTagsPage,
   AdminTokenGrantsPage,
@@ -37,6 +41,7 @@ import {
   CreateReportPage,
   CreateTipPage,
   CreatorEarningsPage,
+  CreatorRoomsPage,
   CreatorMenuItemsPage,
   CreatorProfilePage,
   DeclinePrivateSessionPage,
@@ -45,6 +50,7 @@ import {
   GetLivekitTokenPage,
   GoLivePage,
   HandleCcbillWebhookPage,
+  PaymentReturnPage,
   LoginPage,
   PrepareRoomPage,
   RegisterPage,
@@ -103,6 +109,7 @@ export function App() {
           <Route path="/creator/tips/:tipId/complete" element={<CompleteTipPage />} />
           <Route path="/token-packs" element={<TokenPacksPage />} />
           <Route path="/payments/ccbill/checkout" element={<CreateCcbillCheckoutPage />} />
+          <Route path="/payments/return" element={<PaymentReturnPage />} />
           <Route path="/webhooks/ccbill" element={<HandleCcbillWebhookPage />} />
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/rooms/:roomId/private-sessions/request" element={<RequestPrivateSessionPage />} />
@@ -113,6 +120,7 @@ export function App() {
           <Route path="/media/upload" element={<UploadMediaPage />} />
           <Route path="/rooms/:roomId/thumbnail/capture" element={<CaptureRoomThumbnailPage />} />
           <Route path="/creator/earnings" element={<CreatorEarningsPage />} />
+          <Route path="/creator/rooms" element={<CreatorRoomsPage />} />
           <Route path="/reports" element={<CreateReportPage />} />
           </Route>
         </Route>
@@ -145,10 +153,14 @@ export function App() {
             <Route path="/admin/media/:mediaId/hide" element={<AdminHideMediaPage />} />
             <Route path="/admin/reports" element={<AdminReportsPage />} />
             <Route path="/admin/reports/:reportId/review" element={<AdminReviewReportPage />} />
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/tags" element={<AdminTagsPage />} />
             <Route path="/admin/tags/new" element={<AdminCreateTagPage />} />
             <Route path="/admin/tags/:tagId/edit" element={<AdminEditTagPage />} />
             <Route path="/admin/token-grants" element={<AdminTokenGrantsPage />} />
+            <Route path="/admin/token-packs" element={<AdminTokenPacksPage />} />
+            <Route path="/admin/token-packs/new" element={<AdminCreateTokenPackPage />} />
+            <Route path="/admin/token-packs/:packId/edit" element={<AdminEditTokenPackPage />} />
           </Route>
         </Route>
 

@@ -1,42 +1,120 @@
 import { useNavigate, useParams } from 'react-router-dom'
-import { z } from 'zod'
-import { useRequestPrivateSession } from '@streamyolo/sdk'
-import { Form } from '@/components/ui/Form'
-import type { FieldConfig } from '@/components/ui/Form'
+import { useRequestPrivateSession, useRoom, useWallet } from '@streamyolo/sdk'
+import { Button } from '@/components/ui/Button'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { Card, CardContent } from '@/components/ui/Card'
+import { Coins, Camera, Monitor, Clock } from 'lucide-react'
 import { toast } from 'sonner'
-
-const schema = z.object({
-  message: z.string().max(300).optional().or(z.literal('')),
-})
-type FormData = z.infer<typeof schema>
-
-const fields: FieldConfig[] = [
-  { name: 'message', label: 'Message to creator (optional)', type: 'textarea', voice: true, required: false, rows: 4 },
-]
+import { useState } from 'react'
 
 export function RequestPrivateSessionPage() {
   const navigate = useNavigate()
   const { roomId } = useParams<{ roomId: string }>()
+  const { data: roomData, isLoading: roomLoading } = useRoom(roomId!)
+  const { data: walletData } = useWallet()
   const mutation = useRequestPrivateSession()
+  const [message, setMessage] = useState('')
+
+  if (roomLoading) return (
+    <div className="space-y-4">
+      <Skeleton className="h-6 w-48" />
+      <Skeleton className="h-40 w-full rounded-xl" />
+      <Skeleton className="h-24 w-full rounded-xl" />
+    </div>
+  )
+
+  const room = (roomData as any)?.data
+  if (!room) return <p className="text-muted-foreground">Room not found.</p>
+
+  const rate: number = room.privateRateTokensPerMinute ?? 0
+  const minMinutes: number = room.minPrivateMinutes ?? 1
+  const minCost = rate * minMinutes
+  const tokenBalance: number = (walletData as any)?.data?.wallet?.tokenBalance ?? 0
+  const canAfford = tokenBalance >= minCost
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      await mutation.mutateAsync({ roomId: roomId!, ...(message ? { message } : {}) })
+      toast.success('Session requested — waiting for creator to accept')
+      navigate(-1)
+    } catch {
+      toast.error('Failed to request session')
+    }
+  }
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Request Private Session</h1>
-      <Form<FormData>
-        fields={fields}
-        schema={schema}
-        onSubmit={async (data) => {
-          try {
-            await mutation.mutateAsync({ roomId: roomId!, ...data })
-            toast.success('Session requested')
-            navigate(-1)
-          } catch {
-            toast.error('Failed to request session')
-          }
-        }}
-        isLoading={mutation.isPending}
-        submitLabel="Request Session"
-      />
+    <div className="space-y-6 max-w-md">
+      <div>
+        <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          ← Back
+        </button>
+        <h1 className="text-xl font-semibold mt-2">Request Private Session</h1>
+        <p className="text-sm text-muted-foreground">with {room.creator?.displayName ?? 'Creator'}</p>
+      </div>
+
+      <Card>
+        <CardContent className="py-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Coins className="h-4 w-4 text-primary shrink-0" />
+            <span><strong>{rate.toLocaleString()}</strong> tokens/min</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span>Minimum <strong>{minMinutes}</strong> minute{minMinutes !== 1 ? 's' : ''} · <strong>{minCost.toLocaleString()}</strong> tokens minimum</span>
+          </div>
+          {room.privateViewerCamRequired && (
+            <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+              <Camera className="h-4 w-4 shrink-0" />
+              <span>Your camera is required</span>
+            </div>
+          )}
+          {room.privateScreenShareAllowed && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Monitor className="h-4 w-4 shrink-0" />
+              <span>Screen sharing allowed</span>
+            </div>
+          )}
+          {room.privateRulesText && (
+            <div className="pt-2 border-t text-sm text-muted-foreground whitespace-pre-wrap">
+              {room.privateRulesText}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">Your balance</span>
+        <span className={`font-medium flex items-center gap-1 ${canAfford ? '' : 'text-destructive'}`}>
+          <Coins className="h-3.5 w-3.5" />
+          {tokenBalance.toLocaleString()}
+          {!canAfford && <span className="text-xs ml-1">(need {minCost.toLocaleString()})</span>}
+        </span>
+      </div>
+
+      {!canAfford && (
+        <p className="text-sm text-destructive">
+          You need at least {minCost.toLocaleString()} tokens for the minimum session.{' '}
+          <button onClick={() => navigate('/token-packs')} className="underline">Buy tokens</button>
+        </p>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Message to creator <span className="text-muted-foreground">(optional)</span></label>
+          <textarea
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+            rows={3}
+            maxLength={300}
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            placeholder="Let the creator know what you'd like..."
+          />
+        </div>
+        <Button type="submit" loading={mutation.isPending} disabled={!canAfford}>
+          Request Session
+        </Button>
+      </form>
     </div>
   )
 }

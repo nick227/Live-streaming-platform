@@ -26,6 +26,8 @@ const NAV = [
   { to: '/admin/reports',           label: 'Reports',         icon: Flag },
   { to: '/admin/tags',              label: 'Tags',            icon: Tag },
   { to: '/admin/token-grants',      label: 'Token Grants',    icon: Coins },
+  { to: '/admin/token-packs',       label: 'Token Packs',     icon: Coins },
+  { to: '/admin/settings',          label: 'Settings',        icon: LayoutDashboard },
 ]
 
 function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: React.ElementType }) {

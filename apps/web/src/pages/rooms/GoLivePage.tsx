@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   useCaptureRoomThumbnail,
   useCreatorEarnings,
+  useCreatorProfile,
   useRoom,
   useGoLive,
   useEndRoom,
@@ -29,7 +30,9 @@ import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant } from '@liveki
 import { Track } from 'livekit-client'
 import type { LucideIcon } from 'lucide-react'
 import {
+  AlertCircle,
   Camera,
+  CheckCircle2,
   Clock,
   Coins,
   Lock,
@@ -60,6 +63,8 @@ type BroadcastState =
   | 'ENDING'
   | 'ENDED'
 
+type TipRoomEvent = Extract<RoomEvent, { type: 'tip' }>
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function formatElapsed(seconds: number) {
@@ -72,9 +77,8 @@ function userLabel(user: ChatMessageDto['user']) {
   return user?.displayName ?? user?.id ?? 'Viewer'
 }
 
-function tipAmountFromEvent(event: RoomEvent) {
-  if (event.type !== 'tip') return 0
-  return event.amountTokens
+function privateRequestViewer(request: any) {
+  return request.viewer ?? { id: request.viewerId, displayName: request.viewerId }
 }
 
 // ─── LocalPreview ─────────────────────────────────────────────────────────────
@@ -497,6 +501,7 @@ export function GoLivePage() {
   const { roomId } = useParams<{ roomId: string }>()
   const { data: roomData } = useRoom(roomId!)
   const room = roomData?.data?.room
+  const { data: profileData } = useCreatorProfile()
 
   const [state, setState] = useState<BroadcastState>('PREVIEW_LOCAL')
   const [livekitToken, setLivekitToken] = useState<string | null>(null)
@@ -583,7 +588,38 @@ export function GoLivePage() {
   const { data: earningsData } = useCreatorEarnings({ limit: 10 })
   const { data: privateReqs } = useCreatorPrivateSessions(roomId!)
 
-  const pendingRequests = privateReqs?.data?.filter((r: any) => r.status === 'REQUESTED') || []
+  const { activeViewers, pendingRequests, recentTips, roomTokensEarned } = useMemo(() => {
+    const viewerMap = new Map<string, any>()
+    const tips: TipRoomEvent[] = []
+    let tokenTotal = 0
+
+    for (const event of messages) {
+      const user = event.message.user
+      if (user?.id) viewerMap.set(user.id, user)
+
+      if (event.type === 'tip') {
+        tokenTotal += event.amountTokens
+        tips.unshift(event)
+        if (tips.length > 5) tips.pop()
+      }
+    }
+
+    const requests = []
+    for (const request of privateReqs?.data ?? []) {
+      if ((request as any).status !== 'REQUESTED') continue
+      requests.push(request)
+
+      const viewer = privateRequestViewer(request)
+      if (viewer?.id) viewerMap.set(viewer.id, viewer)
+    }
+
+    return {
+      activeViewers: Array.from(viewerMap.values()),
+      pendingRequests: requests,
+      recentTips: tips,
+      roomTokensEarned: tokenTotal,
+    }
+  }, [messages, privateReqs?.data])
   const menuGoal = roomMenuData?.data?.goal
   useEffect(() => {
     if (menuGoal) setLiveGoal(menuGoal)
@@ -591,8 +627,6 @@ export function GoLivePage() {
   const goal = liveGoal ?? menuGoal
   const pendingEarnings = (earningsData as any)?.data?.pendingTokenBalance ?? 0
   const displayViewerCount = viewerCount ?? room?.viewerCount ?? 0
-  const roomTokensEarned = messages.reduce((sum, event) => sum + tipAmountFromEvent(event), 0)
-  const recentTips = messages.filter((event) => event.type === 'tip').slice(-5).reverse()
   const isPrivate = state === 'LIVE_PRIVATE'
 
   const elapsedPrivateSeconds = privateStartedAt
@@ -751,21 +785,39 @@ export function GoLivePage() {
     )
   }
 
-  // ─── viewer map ────────────────────────────────────────────────────────────
-
-  const viewerMap = new Map<string, any>()
-  messages.forEach((event) => {
-    if (event.message.user?.id) viewerMap.set(event.message.user.id, event.message.user)
-  })
-  pendingRequests.forEach((request: any) => {
-    const viewer = request.viewer ?? { id: request.viewerId, displayName: request.viewerId }
-    if (viewer?.id) viewerMap.set(viewer.id, viewer)
-  })
-  const activeViewers = Array.from(viewerMap.values())
-
   if (!room) {
     return <div className="p-8 text-muted-foreground animate-pulse">Loading studio…</div>
   }
+
+  const profile = (profileData as any)?.data
+  const menuItems: any[] = roomMenuData?.data?.items ?? []
+  const eligibilityChecks = [
+    {
+      label: 'Creator account approved',
+      ok: profile?.status === 'ACTIVE',
+      hint: 'Waiting for admin to approve your creator account',
+      link: null,
+    },
+    {
+      label: 'Room thumbnail',
+      ok: Boolean(room.thumbnailUrl),
+      hint: 'Capture a thumbnail from your camera',
+      link: `/rooms/${roomId}/thumbnail/capture`,
+    },
+    {
+      label: 'Private session rate',
+      ok: (profile?.privateRateTokensPerMinute ?? 0) > 0 && Boolean(profile?.privateRulesText),
+      hint: 'Set your rate and rules in Creator Settings',
+      link: '/creator/profile',
+    },
+    {
+      label: 'Tip menu configured',
+      ok: menuItems.length > 0,
+      hint: 'Add at least one item to your tip menu',
+      link: '/creator/menu-items',
+    },
+  ]
+  const allEligible = eligibilityChecks.every((c) => c.ok)
 
   const goalPct = goal
     ? Math.min(100, Math.round((goal.currentTokens / goal.targetTokens) * 100))
@@ -802,6 +854,36 @@ export function GoLivePage() {
             </span>
           </div>
         </div>
+
+        {/* Thumbnail hint — show when previewing and no thumbnail yet */}
+        {state === 'PREVIEW_LOCAL' && !room.thumbnailUrl && (
+          <p className="text-xs text-muted-foreground">
+            No thumbnail yet — use the <Camera className="inline h-3.5 w-3.5" /> button in the video overlay to capture one.
+          </p>
+        )}
+
+        {/* Eligibility checklist — show when previewing and not all checks pass */}
+        {state === 'PREVIEW_LOCAL' && !allEligible && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 space-y-2">
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-500/80">Pre-flight Check</p>
+            {eligibilityChecks.map((check) => (
+              <div key={check.label} className="flex items-start gap-2">
+                {check.ok
+                  ? <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                  : <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />}
+                <div className="text-sm flex-1">
+                  <span className={check.ok ? 'text-muted-foreground line-through' : 'text-foreground'}>{check.label}</span>
+                  {!check.ok && check.link && (
+                    <a href={check.link} className="ml-2 text-xs text-amber-400 underline hover:text-amber-300">Fix →</a>
+                  )}
+                  {!check.ok && !check.link && (
+                    <span className="ml-2 text-xs text-muted-foreground">{check.hint}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Video with floating controls */}
         <VideoContainer

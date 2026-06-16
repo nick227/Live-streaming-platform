@@ -145,6 +145,12 @@ export function CreatorProfilePage() {
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Account</h2>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
+            <Link to="/creator/rooms">
+              <Radio className="h-4 w-4 mr-1.5" />
+              My Rooms
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
             <Link to="/creator/rooms/prepare">
               <Radio className="h-4 w-4 mr-1.5" />
               New Room

@@ -356,3 +356,85 @@ export async function adminReviewReport(request: any, reply: any) {
   const report = await adminService.reviewReport(request.user.id, request.params.reportId, request.body)
   return reply.send({ data: formatReport(report) })
 }
+
+// ── Settings ───────────────────────────────────────────────────────────────────
+
+export async function getPlatformSettings(_request: any, reply: any) {
+  const result = await adminService.getSettings()
+  return reply.send(result)
+}
+
+export async function getAdminSettings(_request: any, reply: any) {
+  const result = await adminService.getSettings()
+  return reply.send(result)
+}
+
+export async function updateAdminSettings(request: any, reply: any) {
+  const result = await adminService.updateSettings(request.user.id, request.body.activePaymentProvider)
+  return reply.send(result)
+}
+
+export async function updatePlatformSettings(request: any, reply: any) {
+  const result = await adminService.updateSettings(request.user.id, request.body.activePaymentProvider)
+  return reply.send(result)
+}
+
+// ── Wallet ────────────────────────────────────────────────────────────────────
+
+export async function getAdminUserWallet(request: any, reply: any) {
+  const result = await adminService.getUserWallet(request.params.userId, request.query ?? {})
+  return reply.send(result)
+}
+
+export async function adminGrantTokens(request: any, reply: any) {
+  const { amountTokens, reason } = request.body
+  const result = await adminService.grantTokens(request.user.id, request.params.userId, amountTokens, reason)
+  return reply.send(result)
+}
+
+export async function adminRevokeTokens(request: any, reply: any) {
+  const { amountTokens, reason } = request.body
+  const result = await adminService.revokeTokens(request.user.id, request.params.userId, amountTokens, reason)
+  return reply.send(result)
+}
+
+export async function adminResetWallet(request: any, reply: any) {
+  const { reason } = request.body
+  const result = await adminService.resetWallet(request.user.id, request.params.userId, reason)
+  return reply.send(result)
+}
+
+// ── Token Packs ───────────────────────────────────────────────────────────────
+
+function formatTokenPack(p: any) {
+  return {
+    id: p.id,
+    name: p.name,
+    priceCents: p.priceCents,
+    tokenAmount: p.tokenAmount,
+    bonusTokenAmount: p.bonusTokenAmount,
+    currency: p.currency,
+    isActive: p.isActive,
+    sortOrder: p.sortOrder,
+  }
+}
+
+export async function listAdminTokenPacks(request: any, reply: any) {
+  const packs = await adminService.listAllTokenPacks()
+  return reply.send({ data: packs.map(formatTokenPack) })
+}
+
+export async function createAdminTokenPack(request: any, reply: any) {
+  const pack = await adminService.createTokenPack(request.body)
+  return reply.send({ data: formatTokenPack(pack) })
+}
+
+export async function updateAdminTokenPack(request: any, reply: any) {
+  const pack = await adminService.updateTokenPack(request.params.packId, request.body)
+  return reply.send({ data: formatTokenPack(pack) })
+}
+
+export async function deleteAdminTokenPack(request: any, reply: any) {
+  const result = await adminService.deleteTokenPack(request.params.packId)
+  return reply.send({ data: result })
+}

@@ -108,6 +108,69 @@ export function useAdminRestoreUser() {
   })
 }
 
+// ── Admin Wallet ──────────────────────────────────────────────────────────────
+
+export function useAdminUserWallet(userId: string, params?: { cursor?: string; limit?: number }) {
+  return useQuery({
+    queryKey: ['admin', 'user', userId, 'wallet', params],
+    queryFn: async () =>
+      unwrap(
+        await getApiClient().GET('/admin/users/{userId}/wallet', {
+          params: { path: { userId }, query: params as any },
+        }),
+      ),
+    enabled: Boolean(userId),
+  })
+}
+
+export function useAdminGrantTokens() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, ...body }: { userId: string; amountTokens: number; reason: string }) =>
+      unwrap(
+        await getApiClient().POST('/admin/users/{userId}/wallet/grant', {
+          params: { path: { userId } },
+          body: body as any,
+        }),
+      ),
+    onSuccess: (_, { userId }) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'user', userId] })
+    },
+  })
+}
+
+export function useAdminRevokeTokens() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, ...body }: { userId: string; amountTokens: number; reason: string }) =>
+      unwrap(
+        await getApiClient().POST('/admin/users/{userId}/wallet/revoke', {
+          params: { path: { userId } },
+          body: body as any,
+        }),
+      ),
+    onSuccess: (_, { userId }) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'user', userId] })
+    },
+  })
+}
+
+export function useAdminResetWallet() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, ...body }: { userId: string; reason: string }) =>
+      unwrap(
+        await getApiClient().POST('/admin/users/{userId}/wallet/reset', {
+          params: { path: { userId } },
+          body: body as any,
+        }),
+      ),
+    onSuccess: (_, { userId }) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'user', userId] })
+    },
+  })
+}
+
 // ── Creators ──────────────────────────────────────────────────────────────────
 
 export function useAdminCreators(params?: { cursor?: string; limit?: number; status?: string }) {
@@ -342,5 +405,82 @@ export function useAdminReviewReport() {
         }),
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'reports'] }),
+  })
+}
+
+// ── Token Packs ───────────────────────────────────────────────────────────────
+
+export function useAdminTokenPacks() {
+  return useQuery({
+    queryKey: ['admin', 'token-packs'],
+    queryFn: async () => unwrap(await getApiClient().GET('/admin/token-packs')),
+  })
+}
+
+export function useAdminCreateTokenPack() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: { name: string; priceCents: number; tokenAmount: number; bonusTokenAmount?: number; currency?: string; isActive?: boolean; sortOrder?: number }) =>
+      unwrap(await getApiClient().POST('/admin/token-packs', { body: body as any })),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'token-packs'] })
+      qc.invalidateQueries({ queryKey: ['token-packs'] })
+    },
+  })
+}
+
+export function useAdminUpdateTokenPack() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ packId, ...body }: { packId: string; name?: string; priceCents?: number; tokenAmount?: number; bonusTokenAmount?: number; isActive?: boolean; sortOrder?: number }) =>
+      unwrap(
+        await getApiClient().PATCH('/admin/token-packs/{packId}', {
+          params: { path: { packId } },
+          body: body as any,
+        }),
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'token-packs'] })
+      qc.invalidateQueries({ queryKey: ['token-packs'] })
+    },
+  })
+}
+
+export function useAdminDeleteTokenPack() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (packId: string) =>
+      unwrap(
+        await getApiClient().DELETE('/admin/token-packs/{packId}', { params: { path: { packId } } }),
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'token-packs'] })
+      qc.invalidateQueries({ queryKey: ['token-packs'] })
+    },
+  })
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export function useAdminSettings() {
+  return useQuery({
+    queryKey: ['admin', 'settings'],
+    queryFn: async () => unwrap(await getApiClient().GET('/admin/settings')),
+  })
+}
+
+export function useUpdateAdminSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: { activePaymentProvider: 'CCBILL' | 'DEMO' }) =>
+      unwrap(
+        await getApiClient().PATCH('/admin/settings', {
+          body: body as any,
+        }),
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      qc.invalidateQueries({ queryKey: ['settings'] })
+    },
   })
 }

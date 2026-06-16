@@ -742,7 +742,14 @@ components:
         menuItemId: { type: string }
         requestText: { type: string, maxLength: 500 }
 
-    # ── Token packs ───────────────────────────────────────────────────────────
+    # ── Token packs & Settings ───────────────────────────────────────────────
+
+    PlatformSettingsDto:
+      type: object
+      required: [activePaymentProvider, tokenPurchasesEnabled]
+      properties:
+        activePaymentProvider: { type: string, enum: [CCBILL, DEMO] }
+        tokenPurchasesEnabled: { type: boolean }
 
     TokenPackDto:
       type: object
@@ -991,6 +998,20 @@ components:
 # ─────────────────────────────────────────────────────────────────────────────
 
 paths:
+
+  # ── Settings ──────────────────────────────────────────────────────────────────
+
+  /settings:
+    get:
+      operationId: getPlatformSettings
+      summary: Get public platform settings
+      tags: [system]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformSettingsDto' }
 
   # ── Auth ────────────────────────────────────────────────────────────────────
 
@@ -2063,6 +2084,38 @@ paths:
 
   # ── Payments ──────────────────────────────────────────────────────────────────
 
+  /payments/checkout:
+    post:
+      operationId: createCheckout
+      summary: Create a checkout for a token pack
+      tags: [payments]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tokenPackId]
+              properties:
+                tokenPackId: { type: string }
+      responses:
+        '200':
+          description: Checkout created or instantly approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [PENDING, APPROVED] }
+                  checkoutUrl: { type: string, nullable: true }
+                  tokensCredited: { type: integer, nullable: true }
+        '400': { $ref: '#/components/responses/UnprocessableEntity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /payments/ccbill/checkout:
     post:
       operationId: createCcbillCheckout
@@ -2489,6 +2542,37 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      summary: Get platform settings (admin)
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformSettingsDto' }
+    patch:
+      operationId: updateAdminSettings
+      summary: Update platform settings (admin)
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformSettingsDto' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformSettingsDto' }
+
   /admin/rooms:
     get:
       operationId: listAdminRooms
@@ -2672,6 +2756,133 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /admin/users/{userId}/wallet:
+    get:
+      operationId: getAdminUserWallet
+      summary: Get user wallet and ledger
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Wallet and ledger list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [wallet, ledger, meta]
+                properties:
+                  wallet: { $ref: '#/components/schemas/WalletSummary' }
+                  ledger:
+                    type: array
+                    items: { $ref: '#/components/schemas/LedgerEntryDto' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/users/{userId}/wallet/grant:
+    post:
+      operationId: adminGrantTokens
+      summary: Grant test tokens
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountTokens, reason]
+              properties:
+                amountTokens: { type: integer, minimum: 1 }
+                reason: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WalletSummary' }
+        '400': { $ref: '#/components/responses/UnprocessableEntity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/users/{userId}/wallet/revoke:
+    post:
+      operationId: adminRevokeTokens
+      summary: Revoke test tokens
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountTokens, reason]
+              properties:
+                amountTokens: { type: integer, minimum: 1 }
+                reason: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WalletSummary' }
+        '400': { $ref: '#/components/responses/UnprocessableEntity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/users/{userId}/wallet/reset:
+    post:
+      operationId: adminResetWallet
+      summary: Reset test tokens to 0
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WalletSummary' }
+        '400': { $ref: '#/components/responses/UnprocessableEntity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/users/{userId}/suspend:
     post:
@@ -3290,3 +3501,127 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  # ── Admin Token Packs ────────────────────────────────────────────────────────
+
+  /admin/token-packs:
+    get:
+      operationId: listAdminTokenPacks
+      summary: Admin list all token packs
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All token packs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/TokenPackDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createAdminTokenPack
+      summary: Admin create a token pack
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, priceCents, tokenAmount]
+              properties:
+                name: { type: string }
+                priceCents: { type: integer, minimum: 1 }
+                tokenAmount: { type: integer, minimum: 1 }
+                bonusTokenAmount: { type: integer, minimum: 0 }
+                currency: { type: string, enum: [USD] }
+                isActive: { type: boolean }
+                sortOrder: { type: integer }
+      responses:
+        '200':
+          description: Token pack created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/TokenPackDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/token-packs/{packId}:
+    patch:
+      operationId: updateAdminTokenPack
+      summary: Admin update a token pack
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: packId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                priceCents: { type: integer, minimum: 1 }
+                tokenAmount: { type: integer, minimum: 1 }
+                bonusTokenAmount: { type: integer, minimum: 0 }
+                isActive: { type: boolean }
+                sortOrder: { type: integer }
+      responses:
+        '200':
+          description: Token pack updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/TokenPackDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteAdminTokenPack
+      summary: Admin delete a token pack
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: packId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Token pack deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [ok]
+                    properties:
+                      ok: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
