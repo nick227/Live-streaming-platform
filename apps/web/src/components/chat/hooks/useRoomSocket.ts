@@ -9,6 +9,13 @@ import type { PrivateRequestStatus, RoomSocketCallbacks } from '../socket/types'
 
 export type { RoomSocketCallbacks } from '../socket/types'
 
+function applyVipReward(prev: Set<string>, reward: { type: string; userId: string }) {
+  const next = new Set(prev)
+  if (reward.type === 'VIP') next.add(reward.userId)
+  else if (reward.type === 'UNVIP') next.delete(reward.userId)
+  return next
+}
+
 export function useRoomSocket(
   roomId: string | undefined,
   initialMessages: ChatMessageDto[],
@@ -18,6 +25,7 @@ export function useRoomSocket(
   const [messages, setMessages] = useState<RoomEvent[]>([])
   const [viewerCount, setViewerCount] = useState<number | null>(null)
   const [pinnedMessage, setPinnedMessage] = useState<ChatMessageDto | null>(null)
+  const [vipUserIds, setVipUserIds] = useState<Set<string>>(() => new Set())
   const [privateRequestStatus, setPrivateRequestStatus] = useState<PrivateRequestStatus>('IDLE')
   const [connected, setConnected] = useState(false)
   const [sending, setSending] = useState(false)
@@ -52,6 +60,9 @@ export function useRoomSocket(
         setPinnedMessage((prev) =>
           prev?.id === messageId ? { ...prev, deletedAt } : prev,
         )
+      },
+      onUserRewarded: (payload) => {
+        setVipUserIds((prev) => applyVipReward(prev, payload.reward))
       },
       navigate,
       toastError: (message) => toast.error(message),
@@ -103,6 +114,7 @@ export function useRoomSocket(
     messages,
     viewerCount,
     pinnedMessage,
+    vipUserIds,
     connected,
     sending,
     privateRequestStatus,

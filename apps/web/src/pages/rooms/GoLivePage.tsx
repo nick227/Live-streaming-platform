@@ -19,7 +19,10 @@ import {
   usePinRoomMessage,
   useRewardRoomUser,
   useUnmuteRoomUser,
+  useUpdateCreatorRoom,
+  useRoomTaxonomy,
 } from '@streamyolo/sdk'
+import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -47,6 +50,98 @@ import {
   type RoomEvent,
 } from '@/components/chat'
 import { captureVideoFrameAsFormData } from '@/lib/captureVideoFrame'
+
+type SelectOption = {
+  label: string
+  value: string
+}
+
+function selectedSummary(options: SelectOption[], selectedValues: string[], fallback: string) {
+  const labels = options
+    .filter((option) => selectedValues.includes(option.value))
+    .map((option) => option.label)
+
+  if (labels.length === 0) return fallback
+  if (labels.length <= 2) return labels.join(', ')
+  return `${labels.slice(0, 2).join(', ')} +${labels.length - 2}`
+}
+
+function MultiSelectDropdown({
+  label,
+  options,
+  selectedValues,
+  onToggle,
+  placeholder = 'Any',
+}: {
+  label: string
+  options: SelectOption[]
+  selectedValues: string[]
+  onToggle: (value: string) => void
+  placeholder?: string
+}) {
+  return (
+    <details className="relative group">
+      <summary className="flex h-9 cursor-pointer list-none items-center justify-between rounded border border-input-border bg-background px-3 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 truncate">{selectedSummary(options, selectedValues, placeholder)}</span>
+        <span className="ml-2 text-xs text-muted-foreground group-open:rotate-180">v</span>
+      </summary>
+      <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded border border-input-border bg-background p-1 shadow-lg">
+        {options.map((option) => {
+          const active = selectedValues.includes(option.value)
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onToggle(option.value)}
+              className={cn(
+                'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-accent',
+                active && 'bg-accent text-accent-foreground',
+              )}
+            >
+              <span className="min-w-0 truncate">{option.label}</span>
+              {active && <span className="text-xs">On</span>}
+            </button>
+          )
+        })}
+      </div>
+      <span className="mt-1 block text-[11px] font-medium text-muted-foreground">{label}</span>
+    </details>
+  )
+}
+
+function LabeledSelect({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: string
+  options: SelectOption[]
+  onChange: (value: string) => void
+}) {
+  return (
+    <div>
+      <select
+        id={id}
+        className="h-9 w-full rounded border border-input-border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <label className="mt-1 block text-[11px] font-medium text-muted-foreground" htmlFor={id}>
+        {label}
+      </label>
+    </div>
+  )
+}
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -478,6 +573,25 @@ export function GoLivePage() {
   const [isVideoOff, setIsVideoOff] = useState(false)
   const videoContainerRef = useRef<HTMLDivElement>(null)
 
+  const [isEditing, setIsEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editCategory, setEditCategory] = useState<any>('')
+  const [editCountryCode, setEditCountryCode] = useState('')
+  const [editTagSlugs, setEditTagSlugs] = useState<string[]>([])
+
+  const { data: taxonomyData } = useRoomTaxonomy()
+  const taxonomy = taxonomyData?.data
+  const updateRoomMutation = useUpdateCreatorRoom()
+
+  useEffect(() => {
+    if (room) {
+      setEditTitle(room.title || '')
+      setEditCategory(room.category || '')
+      setEditCountryCode(room.countryCode || '')
+      setEditTagSlugs(room.tags?.map((t: any) => t.slug) || [])
+    }
+  }, [room])
+
   const goLiveMutation = useGoLive()
   const endMutation = useEndRoom()
   const endPrivateMutation = useEndPrivateSession()
@@ -529,7 +643,7 @@ export function GoLivePage() {
     }),
     [onTipCreated, onUserRewarded, onPrivateRequestCreated, onRoomEnded, onMessagePinned],
   )
-  const { messages, viewerCount, pinnedMessage, markMessageDeleted } = useRoomSocket(
+  const { messages, viewerCount, pinnedMessage, vipUserIds, markMessageDeleted } = useRoomSocket(
     roomId,
     initialMessages,
     socketCallbacks,
@@ -583,6 +697,29 @@ export function GoLivePage() {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [state])
+
+  const handleSaveRoomDetails = async () => {
+    if (!room) return
+    if (!editTitle.trim()) {
+      toast.error('Title is required')
+      return
+    }
+    try {
+      await updateRoomMutation.mutateAsync({
+        roomId: room.id,
+        body: {
+          title: editTitle,
+          category: editCategory,
+          countryCode: editCountryCode,
+          tagSlugs: editTagSlugs,
+        }
+      })
+      setIsEditing(false)
+      toast.success('Room updated')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update room')
+    }
+  }
 
   // ─── handlers ──────────────────────────────────────────────────────────────
 
@@ -729,19 +866,69 @@ export function GoLivePage() {
       <div className="flex flex-col gap-4">
 
         {/* Room header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold leading-tight truncate">{room.title}</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {isPrivate
-                ? 'Private session active — public room paused'
-                : state === 'LIVE_PUBLIC'
-                  ? 'Broadcasting live'
-                  : state === 'STARTING'
-                    ? 'Starting broadcast…'
-                    : 'Ready to broadcast'}
-            </p>
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 flex items-center gap-4">
+              {room.thumbnailUrl && (
+                <img src={room.thumbnailUrl} alt="Thumbnail" className="w-16 h-16 object-cover rounded-lg" />
+              )}
+              <div>
+                {isEditing ? (
+                  <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="font-bold text-lg max-w-sm h-8" />
+                ) : (
+                  <h1 className="text-lg font-bold leading-tight truncate">{room.title}</h1>
+                )}
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isPrivate
+                    ? 'Private session active — public room paused'
+                    : state === 'LIVE_PUBLIC'
+                      ? 'Broadcasting live'
+                      : state === 'STARTING'
+                        ? 'Starting broadcast…'
+                        : 'Ready to broadcast'}
+                </p>
+              </div>
+            </div>
+            {state === 'PREVIEW_LOCAL' && (
+               isEditing ? (
+                 <div className="flex gap-2">
+                   <Button variant="outline" size="sm" onClick={() => {
+                     setIsEditing(false)
+                     setEditTitle(room.title)
+                   }}>Cancel</Button>
+                   <Button size="sm" loading={updateRoomMutation.isPending} onClick={handleSaveRoomDetails}>Save</Button>
+                 </div>
+               ) : (
+                 <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit Info</Button>
+               )
+            )}
           </div>
+          
+          {isEditing && (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 mt-2 pt-3 border-t border-border">
+              <LabeledSelect
+                id="category"
+                label="Category"
+                value={editCategory}
+                options={taxonomy?.categories.map((c) => ({ label: c.label, value: c.value })) ?? []}
+                onChange={(val) => setEditCategory(val)}
+              />
+              <LabeledSelect
+                id="countryCode"
+                label="Country"
+                value={editCountryCode}
+                options={taxonomy?.countries.map((c) => ({ label: c.name, value: c.code })) ?? []}
+                onChange={(val) => setEditCountryCode(val)}
+              />
+              <MultiSelectDropdown
+                label={`Tags ${editTagSlugs.length}`}
+                options={taxonomy?.tags.map((t) => ({ label: t.label, value: t.slug })) ?? []}
+                selectedValues={editTagSlugs}
+                onToggle={(slug) => setEditTagSlugs((curr) => curr.includes(slug) ? curr.filter(x => x !== slug) : [...curr, slug])}
+                placeholder="Tags"
+              />
+            </div>
+          )}
         </div>
 
         {/* Thumbnail hint — show when previewing and no thumbnail yet */}
@@ -752,25 +939,42 @@ export function GoLivePage() {
         )}
 
         {/* Video with floating controls */}
-        <VideoContainer
-          state={state}
-          livekitToken={livekitToken}
-          livekitUrl={livekitUrl}
-          isMuted={isMuted}
-          isVideoOff={isVideoOff}
-          isPrivate={isPrivate}
-          containerRef={videoContainerRef}
-          onToggleMute={() => setIsMuted((m) => !m)}
-          onToggleVideo={() => setIsVideoOff((v) => !v)}
-          onGoLive={handleGoLive}
-          onEndRoom={handleEndRoom}
-          onCaptureThumbnail={handleCaptureThumbnail}
-          onDisconnect={() => setState('ENDED')}
-          loadingGoLive={goLiveMutation.isPending}
-          loadingEnd={endMutation.isPending}
-          loadingCapture={captureThumbnail.isPending}
-          viewerCount={displayViewerCount}
-        />
+        <div className="space-y-3">
+          <VideoContainer
+            state={state}
+            livekitToken={livekitToken}
+            livekitUrl={livekitUrl}
+            isMuted={isMuted}
+            isVideoOff={isVideoOff}
+            isPrivate={isPrivate}
+            containerRef={videoContainerRef}
+            onToggleMute={() => setIsMuted((m) => !m)}
+            onToggleVideo={() => setIsVideoOff((v) => !v)}
+            onGoLive={handleGoLive}
+            onEndRoom={handleEndRoom}
+            onCaptureThumbnail={handleCaptureThumbnail}
+            onDisconnect={() => setState('ENDED')}
+            loadingGoLive={goLiveMutation.isPending}
+            loadingEnd={endMutation.isPending}
+            loadingCapture={captureThumbnail.isPending}
+            viewerCount={displayViewerCount}
+          />
+
+          {state === 'PREVIEW_LOCAL' && (
+            <div className="col-span-2 sm:col-span-4 mt-2">
+              <Button
+                variant="default"
+                size="lg"
+                onClick={handleCaptureThumbnail}
+                loading={captureThumbnail.isPending}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md border-0 py-6 text-lg font-bold transition-all"
+              >
+                <Camera className="h-6 w-6" />
+                Capture Room Thumbnail
+              </Button>
+            </div>
+          )}
+        </div>
 
         {/* Private session status bar */}
         {state === 'LIVE_PRIVATE' && currentPrivateSession && (
@@ -856,6 +1060,7 @@ export function GoLivePage() {
           <CreatorStudioChat
             messages={messages}
             pinnedMessage={pinnedMessage}
+            vipUserIds={vipUserIds}
             eventFilter={eventFilter}
             onEventFilterChange={setEventFilter}
             onUserAction={handleUserAction}

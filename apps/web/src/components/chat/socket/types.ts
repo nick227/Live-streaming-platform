@@ -26,6 +26,7 @@ export type RoomSocketActions = {
   setPrivateRequestStatus: (status: PrivateRequestStatus) => void
   upsertMessage: (message: ChatMessageDto, amountTokens?: number) => void
   markMessageDeleted: (messageId: string, deletedAt: string) => void
+  onUserRewarded: (payload: { reward: { type: string; userId: string } }) => void
   navigate: (path: string) => void
   toastError: (message: string) => void
   getCallbacks: () => RoomSocketCallbacks | undefined

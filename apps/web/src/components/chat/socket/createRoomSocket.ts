@@ -30,7 +30,8 @@ export function attachRoomSocket(
     actions.setPinnedMessage(payload.pinnedMessage ?? null)
     actions.getCallbacks()?.onMessagePinned?.(payload)
   }
-  const onUserRewarded = (payload: { reward: { type: string } }) => {
+  const onUserRewarded = (payload: { reward: { type: string; userId: string } }) => {
+    actions.onUserRewarded(payload)
     actions.getCallbacks()?.onUserRewarded?.(payload)
   }
   const onGoalUpdated = (payload: { roomId: string; goal: RoomGoal }) => {

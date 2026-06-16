@@ -8,6 +8,7 @@ export function ViewerChatPanel({
   className,
   messages,
   pinnedMessage,
+  vipUserIds,
   canChat,
   connected,
   sending,
@@ -16,21 +17,29 @@ export function ViewerChatPanel({
   className?: string
   messages: RoomEvent[]
   pinnedMessage?: ChatMessageDto | null
+  vipUserIds?: ReadonlySet<string>
   canChat: boolean
   connected: boolean
   sending: boolean
   onSend: (body: string) => Promise<void>
 }) {
+  const pinnedUserId = pinnedMessage?.user?.id
+  const pinnedIsVip = Boolean(pinnedUserId && vipUserIds?.has(pinnedUserId))
+
   return (
     <ChatShell
       className={className}
       connected={connected}
-      bannerSlot={pinnedMessage ? <PinnedMessageBanner message={pinnedMessage} variant="viewer" /> : undefined}
+      bannerSlot={
+        pinnedMessage ? (
+          <PinnedMessageBanner message={pinnedMessage} variant="viewer" isVip={pinnedIsVip} />
+        ) : undefined
+      }
       footer={
         <ChatComposer canChat={canChat} connected={connected} sending={sending} onSend={onSend} />
       }
     >
-      <ChatMessageList messages={messages} />
+      <ChatMessageList messages={messages} vipUserIds={vipUserIds} />
     </ChatShell>
   )
 }

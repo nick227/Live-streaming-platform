@@ -8,6 +8,7 @@ import { PinnedMessageBanner } from '../primitives/PinnedMessageBanner'
 export function CreatorStudioChat({
   messages,
   pinnedMessage,
+  vipUserIds,
   eventFilter,
   onEventFilterChange,
   onUserAction,
@@ -16,6 +17,7 @@ export function CreatorStudioChat({
 }: {
   messages: RoomEvent[]
   pinnedMessage?: ChatMessageDto | null
+  vipUserIds?: ReadonlySet<string>
   eventFilter: EventFilter
   onEventFilterChange: (filter: EventFilter) => void
 } & Required<Pick<ModerationHandlers, 'onUserAction' | 'onDeleteMessage' | 'onPinMessage'>>) {
@@ -23,17 +25,24 @@ export function CreatorStudioChat({
     (event) => eventFilter === 'ALL' || getEventFilter(event) === eventFilter,
   )
 
+  const pinnedUserId = pinnedMessage?.user?.id
+  const pinnedIsVip = Boolean(pinnedUserId && vipUserIds?.has(pinnedUserId))
+
   return (
-    <div className="flex-1 bg-card rounded-xl border border-border flex flex-col overflow-hidden min-h-0">
+    <div className="flex-1 bg-card rounded-xl border border-border flex flex-col overflow-hidden min-h-0 shadow-sm">
       <div className="border-b border-border bg-muted/20 px-3 py-2.5 shrink-0">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Event log</p>
         <EventFilterTabs value={eventFilter} onChange={onEventFilterChange} />
       </div>
 
-      {pinnedMessage && <PinnedMessageBanner message={pinnedMessage} variant="studio" />}
+      {pinnedMessage && (
+        <PinnedMessageBanner message={pinnedMessage} variant="studio" isVip={pinnedIsVip} />
+      )}
 
       <ChatMessageList
         messages={visibleMessages}
         variant="studio"
+        vipUserIds={vipUserIds}
         moderation={{ onUserAction, onDeleteMessage, onPinMessage }}
       />
     </div>
