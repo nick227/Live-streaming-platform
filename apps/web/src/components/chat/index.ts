@@ -4,7 +4,7 @@ export { CreatorStudioChat } from './widgets/CreatorStudioChat'
 
 // Hooks
 export { useRoomSocket } from './hooks/useRoomSocket'
-export type { RoomSocketCallbacks } from './socket/types'
+export type { RoomSocketCallbacks, UseRoomSocketOptions } from './hooks/useRoomSocket'
 
 // Types
 export type { ChatMessageDto, RoomEvent } from './model/types'

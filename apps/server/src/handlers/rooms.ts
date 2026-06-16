@@ -1,10 +1,12 @@
 import { RoomService, formatRoom } from '../services/RoomService'
 import { LiveKitService } from '../services/LiveKitService'
+import { ModerationService } from '../services/ModerationService'
 import { parseRepeatableQuery } from '../lib/query'
 import { normalizeCountryCode } from '@streamyolo/shared/iso-countries'
 
 const roomService = new RoomService()
 const liveKitService = new LiveKitService()
+const moderationService = new ModerationService()
 
 export async function getRoomTaxonomy(_request: unknown, reply: { send: (body: unknown) => unknown }) {
   const taxonomy = await roomService.getTaxonomy()
@@ -36,9 +38,11 @@ export async function listCreatorRooms(request: { user: { id: string }; query?: 
 export async function getRoom(request: { params: { slug: string } }, reply: { send: (body: unknown) => unknown }) {
   const room = await roomService.getByIdOrSlug(request.params.slug)
   const formattedRoom = formatRoom(room)
+  const vipUserIds = await moderationService.getActiveVipUserIds(room.creatorId)
   return reply.send({
     data: {
       room: formattedRoom,
+      vipUserIds,
       viewerState: {
         canChat: true,
         canTip: true,
@@ -61,6 +65,11 @@ export async function prepareRoom(request: { user: { id: string }; body: Record<
       },
     },
   })
+}
+
+export async function updateCreatorRoom(request: { user: { id: string }; params: { roomId: string }; body: Record<string, unknown> }, reply: { send: (body: unknown) => unknown }) {
+  const room = await roomService.update(request.user.id, request.params.roomId, request.body as any)
+  return reply.send({ data: { room: formatRoom(room) } })
 }
 
 export async function goLive(request: { user: { id: string }; params: { roomId: string } }, reply: { send: (body: unknown) => unknown }) {

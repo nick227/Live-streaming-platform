@@ -10,6 +10,10 @@ import type { PrivateRequestStatus, RoomSocketCallbacks } from '../socket/types'
 
 export type { RoomSocketCallbacks } from '../socket/types'
 
+export type UseRoomSocketOptions = {
+  initialVipUserIds?: string[]
+}
+
 function applyVipReward(prev: Set<string>, reward: { type: string; userId: string }) {
   const next = new Set(prev)
   if (reward.type === 'VIP') next.add(reward.userId)
@@ -21,6 +25,7 @@ export function useRoomSocket(
   roomId: string | undefined,
   initialMessages: ChatMessageDto[],
   callbacks?: RoomSocketCallbacks,
+  options?: UseRoomSocketOptions,
 ) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<RoomEvent[]>([])
@@ -34,6 +39,15 @@ export function useRoomSocket(
   const socketRef = useRef<Socket | null>(null)
   const callbacksRef = useRef(callbacks)
   callbacksRef.current = callbacks
+
+  useEffect(() => {
+    if (!options?.initialVipUserIds?.length) return
+    setVipUserIds((prev) => {
+      const next = new Set(prev)
+      for (const userId of options.initialVipUserIds!) next.add(userId)
+      return next
+    })
+  }, [options?.initialVipUserIds])
 
   useEffect(() => {
     if (initialMessages.length === 0) return

@@ -65,6 +65,7 @@ export function RoomPage() {
   const { data, isLoading } = useRoom(slug!)
   const room = data?.data?.room ?? null
   const viewerState = data?.data?.viewerState
+  const initialVipUserIds = data?.data?.vipUserIds
   const { data: menuData } = useRoomMenu(room?.id ?? '')
   const { data: msgData } = useRoomMessages(room?.id ?? '')
 
@@ -87,6 +88,8 @@ export function RoomPage() {
   } = useRoomSocket(
     room?.id,
     initialMessages,
+    undefined,
+    { initialVipUserIds },
   )
 
   if (isLoading) {

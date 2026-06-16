@@ -14,12 +14,14 @@ export function ChatComposer({
   connected,
   sending,
   slowModeSeconds = 0,
+  customEmotes = [],
   onSend,
 }: {
   canChat: boolean
   connected: boolean
   sending: boolean
   slowModeSeconds?: number
+  customEmotes?: string[]
   onSend: (body: string) => Promise<void>
 }) {
   const [draft, setDraft] = useState('')
@@ -67,7 +69,7 @@ export function ChatComposer({
       className="shrink-0 rounded-lg border border-border bg-muted/20 p-2 space-y-1.5"
     >
       <div className="flex gap-2">
-        <EmotePicker disabled={disabled} onSelect={insertEmote} />
+        <EmotePicker disabled={disabled} customEmotes={customEmotes} onSelect={insertEmote} />
         <Input
           ref={inputRef}
           value={draft}

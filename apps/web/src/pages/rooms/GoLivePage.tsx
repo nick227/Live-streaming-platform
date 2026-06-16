@@ -21,8 +21,9 @@ import {
   useUnmuteRoomUser,
   useUpdateCreatorRoom,
   useRoomTaxonomy,
+  useCreatorProfile,
+  useUpdateCreatorProfile,
 } from '@streamyolo/sdk'
-import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -50,6 +51,16 @@ import {
   type RoomEvent,
 } from '@/components/chat'
 import { captureVideoFrameAsFormData } from '@/lib/captureVideoFrame'
+import { MAX_ROOM_TAGS } from '@streamyolo/shared/room-taxonomy'
+import type { RoomCategory } from '@streamyolo/shared/room-taxonomy'
+
+const privatePresets = [
+  { label: '5 min - 60 / min', value: '5:60', minPrivateMinutes: 5, privateRateTokensPerMinute: 60 },
+  { label: '5 min - 90 / min', value: '5:90', minPrivateMinutes: 5, privateRateTokensPerMinute: 90 },
+  { label: '10 min - 60 / min', value: '10:60', minPrivateMinutes: 10, privateRateTokensPerMinute: 60 },
+  { label: '10 min - 120 / min', value: '10:120', minPrivateMinutes: 10, privateRateTokensPerMinute: 120 },
+  { label: '15 min - 150 / min', value: '15:150', minPrivateMinutes: 15, privateRateTokensPerMinute: 150 },
+]
 
 type SelectOption = {
   label: string
@@ -115,12 +126,14 @@ function LabeledSelect({
   value,
   options,
   onChange,
+  placeholder,
 }: {
   id: string
   label: string
   value: string
   options: SelectOption[]
   onChange: (value: string) => void
+  placeholder?: string
 }) {
   return (
     <div>
@@ -130,6 +143,7 @@ function LabeledSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
+        {placeholder && <option value="">{placeholder}</option>}
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -573,20 +587,24 @@ export function GoLivePage() {
   const [isVideoOff, setIsVideoOff] = useState(false)
   const videoContainerRef = useRef<HTMLDivElement>(null)
 
-  const [isEditing, setIsEditing] = useState(false)
-  const [editTitle, setEditTitle] = useState('')
-  const [editCategory, setEditCategory] = useState<any>('')
+  const [editCategory, setEditCategory] = useState<RoomCategory | ''>('')
   const [editCountryCode, setEditCountryCode] = useState('')
   const [editTagSlugs, setEditTagSlugs] = useState<string[]>([])
 
   const { data: taxonomyData } = useRoomTaxonomy()
   const taxonomy = taxonomyData?.data
   const updateRoomMutation = useUpdateCreatorRoom()
+  const { data: profileData } = useCreatorProfile()
+  const updateProfileMutation = useUpdateCreatorProfile()
 
   useEffect(() => {
     if (room) {
-      setEditTitle(room.title || '')
-      setEditCategory(room.category || '')
+      const category = room.category
+      setEditCategory(
+        category === 'MALE' || category === 'FEMALE' || category === 'COUPLES' || category === 'TRANS'
+          ? category
+          : '',
+      )
       setEditCountryCode(room.countryCode || '')
       setEditTagSlugs(room.tags?.map((t: any) => t.slug) || [])
     }
@@ -643,13 +661,28 @@ export function GoLivePage() {
     }),
     [onTipCreated, onUserRewarded, onPrivateRequestCreated, onRoomEnded, onMessagePinned],
   )
+  const initialVipUserIds = roomData?.data?.vipUserIds
   const { messages, viewerCount, pinnedMessage, slowModeSeconds, vipUserIds, markMessageDeleted } = useRoomSocket(
     roomId,
     initialMessages,
     socketCallbacks,
+    { initialVipUserIds },
   )
 
   const { data: privateReqs } = useCreatorPrivateSessions(roomId!)
+  const profile = profileData?.data
+  const privateValue = `${profile?.minPrivateMinutes ?? 5}:${profile?.privateRateTokensPerMinute ?? 60}`
+  const privateOptions = privatePresets.some((preset) => preset.value === privateValue)
+    ? privatePresets
+    : [
+        {
+          label: `${profile?.minPrivateMinutes ?? 5} min - ${profile?.privateRateTokensPerMinute ?? 60} / min`,
+          value: privateValue,
+          minPrivateMinutes: profile?.minPrivateMinutes ?? 5,
+          privateRateTokensPerMinute: profile?.privateRateTokensPerMinute ?? 60,
+        },
+        ...privatePresets,
+      ]
 
   const { activeViewers, pendingRequests } = useMemo(() => {
     const viewerMap = new Map<string, any>()
@@ -698,26 +731,60 @@ export function GoLivePage() {
     return () => window.clearInterval(timer)
   }, [state])
 
-  const handleSaveRoomDetails = async () => {
+  async function autosaveRoomDetails(next: {
+    category?: RoomCategory
+    countryCode?: string
+    tagSlugs?: string[]
+  }) {
     if (!room) return
-    if (!editTitle.trim()) {
-      toast.error('Title is required')
-      return
-    }
     try {
       await updateRoomMutation.mutateAsync({
         roomId: room.id,
-        body: {
-          title: editTitle,
-          category: editCategory,
-          countryCode: editCountryCode,
-          tagSlugs: editTagSlugs,
-        }
+        body: next,
       })
-      setIsEditing(false)
-      toast.success('Room updated')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update room')
+    }
+  }
+
+  function handleCategoryChange(value: string) {
+    const next = value as RoomCategory
+    setEditCategory(next)
+    void autosaveRoomDetails({ category: next })
+  }
+
+  function handleCountryChange(value: string) {
+    setEditCountryCode(value)
+    void autosaveRoomDetails({ countryCode: value })
+  }
+
+  function toggleEditTag(slug: string) {
+    setEditTagSlugs((current) => {
+      if (current.includes(slug)) {
+        const next = current.filter((item) => item !== slug)
+        void autosaveRoomDetails({ tagSlugs: next })
+        return next
+      }
+      if (current.length >= MAX_ROOM_TAGS) {
+        toast.error(`You can select up to ${MAX_ROOM_TAGS} tags`)
+        return current
+      }
+      const next = [...current, slug]
+      void autosaveRoomDetails({ tagSlugs: next })
+      return next
+    })
+  }
+
+  async function handlePrivatePresetChange(value: string) {
+    const preset = privateOptions.find((option) => option.value === value)
+    if (!preset) return
+    try {
+      await updateProfileMutation.mutateAsync({
+        privateRateTokensPerMinute: preset.privateRateTokensPerMinute,
+        minPrivateMinutes: preset.minPrivateMinutes,
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update private settings')
     }
   }
 
@@ -873,11 +940,7 @@ export function GoLivePage() {
                 <img src={room.thumbnailUrl} alt="Thumbnail" className="w-16 h-16 object-cover rounded-lg" />
               )}
               <div>
-                {isEditing ? (
-                  <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="font-bold text-lg max-w-sm h-8" />
-                ) : (
-                  <h1 className="text-lg font-bold leading-tight truncate">{room.title}</h1>
-                )}
+                <h1 className="text-lg font-bold leading-tight truncate">{room.title}</h1>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isPrivate
                     ? 'Private session active — public room paused'
@@ -889,46 +952,8 @@ export function GoLivePage() {
                 </p>
               </div>
             </div>
-            {state === 'PREVIEW_LOCAL' && (
-               isEditing ? (
-                 <div className="flex gap-2">
-                   <Button variant="outline" size="sm" onClick={() => {
-                     setIsEditing(false)
-                     setEditTitle(room.title)
-                   }}>Cancel</Button>
-                   <Button size="sm" loading={updateRoomMutation.isPending} onClick={handleSaveRoomDetails}>Save</Button>
-                 </div>
-               ) : (
-                 <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit Info</Button>
-               )
-            )}
           </div>
           
-          {isEditing && (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 mt-2 pt-3 border-t border-border">
-              <LabeledSelect
-                id="category"
-                label="Category"
-                value={editCategory}
-                options={taxonomy?.categories.map((c) => ({ label: c.label, value: c.value })) ?? []}
-                onChange={(val) => setEditCategory(val)}
-              />
-              <LabeledSelect
-                id="countryCode"
-                label="Country"
-                value={editCountryCode}
-                options={taxonomy?.countries.map((c) => ({ label: c.name, value: c.code })) ?? []}
-                onChange={(val) => setEditCountryCode(val)}
-              />
-              <MultiSelectDropdown
-                label={`Tags ${editTagSlugs.length}`}
-                options={taxonomy?.tags.map((t) => ({ label: t.label, value: t.slug })) ?? []}
-                selectedValues={editTagSlugs}
-                onToggle={(slug) => setEditTagSlugs((curr) => curr.includes(slug) ? curr.filter(x => x !== slug) : [...curr, slug])}
-                placeholder="Tags"
-              />
-            </div>
-          )}
         </div>
 
         {/* Thumbnail hint — show when previewing and no thumbnail yet */}
@@ -961,7 +986,7 @@ export function GoLivePage() {
           />
 
           {state === 'PREVIEW_LOCAL' && (
-            <div className="col-span-2 sm:col-span-4 mt-2">
+            <div className="space-y-3">
               <Button
                 variant="default"
                 size="lg"
@@ -972,6 +997,42 @@ export function GoLivePage() {
                 <Camera className="h-6 w-6" />
                 Capture Room Thumbnail
               </Button>
+
+              <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <LabeledSelect
+                    id="category"
+                    label="Category"
+                    value={editCategory}
+                    options={taxonomy?.categories.map((c) => ({ label: c.label, value: c.value })) ?? []}
+                    onChange={handleCategoryChange}
+                    placeholder="Select"
+                  />
+                  <LabeledSelect
+                    id="countryCode"
+                    label="Country"
+                    value={editCountryCode}
+                    options={taxonomy?.countries.map((c) => ({ label: c.name, value: c.code })) ?? []}
+                    onChange={handleCountryChange}
+                    placeholder="Select"
+                  />
+                  <MultiSelectDropdown
+                    label={`Tags ${editTagSlugs.length}/${MAX_ROOM_TAGS}`}
+                    options={taxonomy?.tags.map((t) => ({ label: t.label, value: t.slug })) ?? []}
+                    selectedValues={editTagSlugs}
+                    onToggle={toggleEditTag}
+                    placeholder="Tags"
+                  />
+                </div>
+
+                <LabeledSelect
+                  id="privatePreset"
+                  label="Private"
+                  value={privateValue}
+                  options={privateOptions}
+                  onChange={handlePrivatePresetChange}
+                />
+              </div>
             </div>
           )}
         </div>

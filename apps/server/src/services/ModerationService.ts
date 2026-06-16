@@ -35,6 +35,30 @@ export class ModerationService {
     return bans.map(formatCreatorUserBan)
   }
 
+  async getActiveVipUserIds(creatorId: string) {
+    const rewards = await db.creatorUserReward.findMany({
+      where: { creatorId },
+      orderBy: { createdAt: 'desc' },
+      select: { userId: true, type: true, expiresAt: true },
+    })
+
+    const latestByUser = new Map<string, { type: string; expiresAt: Date | null }>()
+    for (const reward of rewards) {
+      if (!latestByUser.has(reward.userId)) {
+        latestByUser.set(reward.userId, { type: reward.type, expiresAt: reward.expiresAt })
+      }
+    }
+
+    const now = Date.now()
+    const vipUserIds: string[] = []
+    for (const [userId, reward] of latestByUser) {
+      if (reward.type !== 'VIP') continue
+      if (reward.expiresAt && reward.expiresAt.getTime() <= now) continue
+      vipUserIds.push(userId)
+    }
+    return vipUserIds
+  }
+
   async mute(actorUserId: string, roomId: string, input: ModerateUserInput) {
     const { room, creator } = await this.assertCreatorOwnsRoom(actorUserId, roomId)
     await this.assertTargetUser(input.targetUserId)

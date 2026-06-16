@@ -1227,13 +1227,17 @@ paths:
                 properties:
                   data:
                     type: object
-                    required: [room, viewerState]
+                    required: [room, viewerState, vipUserIds]
                     properties:
                       room: { $ref: '#/components/schemas/RoomDetail' }
                       livekitToken:
                         type: string
                         nullable: true
                       viewerState: { $ref: '#/components/schemas/ViewerRoomState' }
+                      vipUserIds:
+                        type: array
+                        items: { type: string }
+                        description: Active creator VIP user IDs for chat badges
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -1292,6 +1296,53 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /creator/rooms/{roomId}:
+    put:
+      operationId: updateCreatorRoom
+      summary: Update an existing room's details before or during broadcast
+      tags: [creator-rooms]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                category: { $ref: '#/components/schemas/RoomCategory' }
+                countryCode: { type: string, pattern: '^[A-Z]{2}$' }
+                tagSlugs:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Room updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [room]
+                    properties:
+                      room: { $ref: '#/components/schemas/RoomDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /creator/rooms/{roomId}/go-live:
     post:
@@ -2426,6 +2477,23 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /media/{mediaId}:
+    get:
+      operationId: getMedia
+      summary: Get media redirect
+      tags: [media]
+      security: []
+      parameters:
+        - in: path
+          name: mediaId
+          required: true
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /rooms/{roomId}/thumbnail/capture:
     post:
