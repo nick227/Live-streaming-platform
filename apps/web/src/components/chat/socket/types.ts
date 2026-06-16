@@ -16,6 +16,7 @@ export type RoomSocketCallbacks = {
   onPrivateRequestCreated?: (payload: unknown) => void
   onPrivateRequestStatusChanged?: (payload: { status: 'ACCEPTED' | 'DECLINED'; privateSessionId?: string }) => void
   onRoomEnded?: (payload: { roomId: string; reason?: string }) => void
+  onRoomStarted?: (payload: { roomId: string }) => void
   onMessagePinned?: (payload: { pinnedMessage?: ChatMessageDto | null }) => void
 }
 

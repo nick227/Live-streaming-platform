@@ -2,19 +2,19 @@ import type { ReactNode } from 'react'
 import { Coins } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatMessageTime } from '../model/formatMessageTime'
-import { getEventFilter } from '../model/eventFilter'
-import type { RoomEvent } from '../model/types'
+import { getChatFilter } from '../model/chatFilter'
+import type { ChatItem } from '../model/types'
 import { ChatUsername } from './ChatUsername'
 import { EVENT_TYPE_STYLES } from './eventTypeStyles'
 
-function studioBadgeLabel(type: RoomEvent['type']) {
+function studioBadgeLabel(type: ChatItem['type']) {
   if (type === 'tip') return 'tips'
   if (type === 'moderation') return 'mod'
   if (type === 'system') return 'notice'
   return 'chat'
 }
 
-function viewerRowClassName(type: RoomEvent['type']) {
+function viewerRowClassName(type: ChatItem['type']) {
   if (type === 'tip') return 'border-l-2 border-l-amber-500 bg-amber-500/10 border-amber-500/20'
   if (type === 'moderation') return 'bg-destructive/10 border-destructive/30'
   if (type === 'system') return 'bg-muted/40 border-border/50'
@@ -29,7 +29,7 @@ export function ChatMessageRow({
   isHighlight = false,
   moderationSlot,
 }: {
-  event: RoomEvent
+  event: ChatItem
   variant?: 'viewer' | 'studio'
   showTimestamp?: boolean
   isVip?: boolean
@@ -40,7 +40,7 @@ export function ChatMessageRow({
   const isTip = event.type === 'tip'
 
   if (variant === 'studio') {
-    const typeKey = getEventFilter(event).toLowerCase()
+    const typeKey = getChatFilter(event).toLowerCase()
     const badgeLabel = studioBadgeLabel(event.type)
     const typeStyle = EVENT_TYPE_STYLES[typeKey] ?? EVENT_TYPE_STYLES.chat
 

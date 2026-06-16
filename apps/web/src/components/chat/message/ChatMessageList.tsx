@@ -4,14 +4,14 @@ import { cn } from '@/lib/utils'
 import { useHighlightIds } from '../hooks/useHighlightIds'
 import { useMessageWindow } from '../hooks/useMessageWindow'
 import { ChatScrollArea } from '../primitives/ChatScrollArea'
-import type { RoomEvent } from '../model/types'
+import type { ChatItem } from '../model/types'
 import { InlineModerationActions } from '../moderation/InlineModerationActions'
 import type { ModerationHandlers } from '../moderation/types'
 import { ChatEmptyState } from './ChatEmptyState'
 import { ChatMessageRow } from './ChatMessageRow'
 
 type ChatMessageListProps = {
-  messages: RoomEvent[]
+  messages: ChatItem[]
   variant?: 'viewer' | 'studio'
   className?: string
   emptyMessage?: string

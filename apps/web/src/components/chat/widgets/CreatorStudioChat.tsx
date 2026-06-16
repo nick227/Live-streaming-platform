@@ -1,6 +1,6 @@
-import { getEventFilter, type EventFilter } from '../model/eventFilter'
+import { getChatFilter, type ChatFilter } from '../model/chatFilter'
 import { formatMessageTime } from '../model/formatMessageTime'
-import type { ChatMessageDto, RoomEvent } from '../model/types'
+import type { ChatItem, ChatMessageDto } from '../model/types'
 import type { ModerationHandlers } from '../moderation/types'
 import { ChatMessageList } from '../message/ChatMessageList'
 import { ChatStatusBanner } from '../primitives/ChatStatusBanner'
@@ -18,15 +18,15 @@ export function CreatorStudioChat({
   onDeleteMessage,
   onPinMessage,
 }: {
-  messages: RoomEvent[]
+  messages: ChatItem[]
   pinnedMessage?: ChatMessageDto | null
   slowModeSeconds?: number
   vipUserIds?: ReadonlySet<string>
-  eventFilter: EventFilter
-  onEventFilterChange: (filter: EventFilter) => void
+  eventFilter: ChatFilter
+  onEventFilterChange: (filter: ChatFilter) => void
 } & Required<Pick<ModerationHandlers, 'onUserAction' | 'onDeleteMessage' | 'onPinMessage'>>) {
   const visibleMessages = messages.filter(
-    (chatItem) => getEventFilter(chatItem) === eventFilter,
+    (chatItem) => getChatFilter(chatItem) === eventFilter,
   )
 
   const pinnedUserId = pinnedMessage?.user?.id

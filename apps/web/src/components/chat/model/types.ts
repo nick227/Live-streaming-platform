@@ -2,7 +2,7 @@ import type { components } from '@streamyolo/sdk'
 
 export type ChatMessageDto = components['schemas']['ChatMessageDto']
 
-export type RoomEvent =
+export type ChatItem =
   | { type: 'chat'; message: ChatMessageDto }
   | { type: 'tip'; message: ChatMessageDto; amountTokens: number }
   | { type: 'system'; message: ChatMessageDto }

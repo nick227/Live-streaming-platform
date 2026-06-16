@@ -27,7 +27,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant } from '@livekit/components-react'
+import { LiveKitRoom, VideoTrack, useLocalParticipant } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 import {
   Camera,
@@ -47,8 +47,7 @@ import {
   useRoomSocket,
   userLabel,
   type ChatMessageDto,
-  type EventFilter,
-  type RoomEvent,
+  type ChatFilter,
 } from '@/components/chat'
 import { captureVideoFrameAsFormData } from '@/lib/captureVideoFrame'
 import { MAX_ROOM_TAGS } from '@streamyolo/shared/room-taxonomy'
@@ -227,8 +226,14 @@ function PublishedTracks({
   isVideoOff: boolean
   isFullscreen: boolean
 }) {
-  const { localParticipant } = useLocalParticipant()
-  const tracks = useTracks([Track.Source.Camera])
+  const { localParticipant, cameraTrack, lastCameraError } = useLocalParticipant()
+  const cameraTrackRef = cameraTrack
+    ? {
+        participant: localParticipant,
+        publication: cameraTrack,
+        source: Track.Source.Camera,
+      }
+    : null
 
   useEffect(() => {
     if (localParticipant) localParticipant.setMicrophoneEnabled(!isMuted).catch(() => { })
@@ -240,22 +245,20 @@ function PublishedTracks({
 
   return (
     <div className={cn('relative bg-black', isFullscreen ? 'w-full h-full' : 'w-full aspect-video')}>
-      {tracks.length === 0 && (
+      {!cameraTrackRef && (
         <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
-          Camera connecting...
+          {lastCameraError ? 'Camera unavailable' : 'Camera connecting...'}
         </div>
       )}
-      {tracks.map((trackRef) =>
-        trackRef.publication.kind === 'video' ? (
-          <VideoTrack
-            key={trackRef.publication.trackSid}
-            trackRef={trackRef}
-            className={cn(
-              'absolute inset-0 w-full h-full',
-              isFullscreen ? 'object-contain' : 'object-cover',
-            )}
-          />
-        ) : null,
+      {cameraTrackRef && (
+        <VideoTrack
+          trackRef={cameraTrackRef}
+          muted
+          className={cn(
+            'absolute inset-0 w-full h-full transform scale-x-[-1]',
+            isFullscreen ? 'object-contain' : 'object-cover',
+          )}
+        />
       )}
     </div>
   )
@@ -522,7 +525,7 @@ function VideoContainer({
             </div>
 
             <div className="flex items-center gap-2">
-              {state === 'PREVIEW_LOCAL' && (
+              {(state === 'PREVIEW_LOCAL' || state === 'ENDED') && (
                 <Button
                   onClick={canStartBroadcast ? onGoLive : undefined}
                   loading={loadingGoLive}
@@ -574,7 +577,7 @@ export function GoLivePage() {
   const [currentPrivateSession, setCurrentPrivateSession] = useState<any | null>(null)
   const [privateStartedAt, setPrivateStartedAt] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
-  const [eventFilter, setEventFilter] = useState<EventFilter>('CHAT')
+  const [eventFilter, setEventFilter] = useState<ChatFilter>('CHAT')
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoOff, setIsVideoOff] = useState(false)
   const videoContainerRef = useRef<HTMLDivElement>(null)
@@ -984,7 +987,7 @@ export function GoLivePage() {
             canStartBroadcast={canStartBroadcast}
           />
 
-          {state === 'PREVIEW_LOCAL' && (
+          {(state === 'PREVIEW_LOCAL' || state === 'ENDED') && (
             <div className="space-y-3">
               <Button
                 variant="default"

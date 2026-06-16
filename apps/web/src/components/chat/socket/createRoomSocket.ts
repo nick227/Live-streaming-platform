@@ -65,6 +65,9 @@ export function attachRoomSocket(
     actions.setPrivateRequestStatus('ACTIVE')
     actions.navigate(`/private-sessions/${payload.privateSession.id}/active`)
   }
+  const onRoomStarted = (payload: { roomId: string }) => {
+    actions.getCallbacks()?.onRoomStarted?.(payload)
+  }
   const onRoomEnded = (payload: { roomId: string; reason?: string }) => {
     actions.getCallbacks()?.onRoomEnded?.(payload)
   }
@@ -95,6 +98,7 @@ export function attachRoomSocket(
   socket.on('private:request_accepted', onPrivateRequestAccepted)
   socket.on('private:request_declined', onPrivateRequestDeclined)
   socket.on('private:session_started', onPrivateSessionStarted)
+  socket.on('room:started', onRoomStarted)
   socket.on('room:ended', onRoomEnded)
   socket.on('room:user_kicked', onUserKicked)
   socket.on('room:user_banned', onUserBanned)

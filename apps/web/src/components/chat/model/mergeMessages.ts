@@ -1,34 +1,34 @@
-import type { ChatMessageDto, RoomEvent } from './types'
+import type { ChatItem, ChatMessageDto } from './types'
 
-function createdAtMs(event: RoomEvent) {
-  return Date.parse(event.message.createdAt)
+function createdAtMs(item: ChatItem) {
+  return Date.parse(item.message.createdAt)
 }
 
-function byCreatedAt(a: RoomEvent, b: RoomEvent) {
+function byCreatedAt(a: ChatItem, b: ChatItem) {
   return createdAtMs(a) - createdAtMs(b)
 }
 
-function mergeEvent(prior: RoomEvent, event: RoomEvent): RoomEvent {
-  return { ...prior, ...event, message: { ...prior.message, ...event.message } } as RoomEvent
+function mergeEvent(prior: ChatItem, item: ChatItem): ChatItem {
+  return { ...prior, ...item, message: { ...prior.message, ...item.message } } as ChatItem
 }
 
-function sortedInsert(events: RoomEvent[], event: RoomEvent) {
-  const eventTime = createdAtMs(event)
-  const next = [...events]
+function sortedInsert(items: ChatItem[], item: ChatItem) {
+  const itemTime = createdAtMs(item)
+  const next = [...items]
   let low = 0
   let high = next.length
 
   while (low < high) {
     const mid = (low + high) >> 1
-    if (createdAtMs(next[mid]) <= eventTime) low = mid + 1
+    if (createdAtMs(next[mid]) <= itemTime) low = mid + 1
     else high = mid
   }
 
-  next.splice(low, 0, event)
+  next.splice(low, 0, item)
   return next
 }
 
-export function toRoomEvent(message: ChatMessageDto, amountTokens?: number): RoomEvent {
+export function toChatItem(message: ChatMessageDto, amountTokens?: number): ChatItem {
   if (message.type === 'TIP_EVENT') {
     return { type: 'tip', message, amountTokens: amountTokens ?? 0 }
   }
@@ -41,32 +41,32 @@ export function toRoomEvent(message: ChatMessageDto, amountTokens?: number): Roo
   return { type: 'chat', message }
 }
 
-export function mergeMessages(existing: RoomEvent[], incoming: RoomEvent[]): RoomEvent[] {
-  const map = new Map<string, RoomEvent>()
-  for (const event of existing) map.set(event.message.id, event)
-  for (const event of incoming) {
-    const prior = map.get(event.message.id)
+export function mergeMessages(existing: ChatItem[], incoming: ChatItem[]): ChatItem[] {
+  const map = new Map<string, ChatItem>()
+  for (const item of existing) map.set(item.message.id, item)
+  for (const item of incoming) {
+    const prior = map.get(item.message.id)
     if (prior) {
-      map.set(event.message.id, mergeEvent(prior, event))
+      map.set(item.message.id, mergeEvent(prior, item))
     } else {
-      map.set(event.message.id, event)
+      map.set(item.message.id, item)
     }
   }
   return Array.from(map.values()).sort(byCreatedAt)
 }
 
-export function upsertMessage(events: RoomEvent[], event: RoomEvent): RoomEvent[] {
-  const index = events.findIndex((entry) => entry.message.id === event.message.id)
+export function upsertMessage(items: ChatItem[], item: ChatItem): ChatItem[] {
+  const index = items.findIndex((entry) => entry.message.id === item.message.id)
   if (index === -1) {
-    if (events.length === 0 || createdAtMs(events[events.length - 1]) <= createdAtMs(event)) {
-      return [...events, event]
+    if (items.length === 0 || createdAtMs(items[items.length - 1]) <= createdAtMs(item)) {
+      return [...items, item]
     }
-    return sortedInsert(events, event)
+    return sortedInsert(items, item)
   }
 
-  const prior = events[index]
-  const merged = mergeEvent(prior, event)
-  const next = [...events]
+  const prior = items[index]
+  const merged = mergeEvent(prior, item)
+  const next = [...items]
   next[index] = merged
 
   if (prior.message.createdAt === merged.message.createdAt) {

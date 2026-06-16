@@ -1,15 +1,15 @@
-import { EVENT_FILTERS, type EventFilter } from '../model/eventFilter'
+import { CHAT_FILTERS, type ChatFilter } from '../model/chatFilter'
 
 export function EventFilterTabs({
   value,
   onChange,
 }: {
-  value: EventFilter
-  onChange: (filter: EventFilter) => void
+  value: ChatFilter
+  onChange: (filter: ChatFilter) => void
 }) {
   return (
     <div className="flex flex-wrap gap-1">
-      {EVENT_FILTERS.map((filter) => (
+      {CHAT_FILTERS.map((filter) => (
         <button
           key={filter}
           type="button"

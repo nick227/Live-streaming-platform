@@ -4,7 +4,7 @@ import { ChatAccessBanner } from '../primitives/ChatAccessBanner'
 import { ChatShell } from '../primitives/ChatShell'
 import { ChatStatusBanner } from '../primitives/ChatStatusBanner'
 import { PinnedMessageBanner } from '../primitives/PinnedMessageBanner'
-import type { ChatMessageDto, RoomEvent } from '../model/types'
+import type { ChatItem, ChatMessageDto } from '../model/types'
 
 export function ViewerChatPanel({
   className,
@@ -19,7 +19,7 @@ export function ViewerChatPanel({
   onSend,
 }: {
   className?: string
-  messages: RoomEvent[]
+  messages: ChatItem[]
   pinnedMessage?: ChatMessageDto | null
   slowModeSeconds?: number
   vipUserIds?: ReadonlySet<string>

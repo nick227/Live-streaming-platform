@@ -7,8 +7,8 @@ export { useRoomSocket } from './hooks/useRoomSocket'
 export type { RoomSocketCallbacks, UseRoomSocketOptions } from './hooks/useRoomSocket'
 
 // Types
-export type { ChatMessageDto, RoomEvent } from './model/types'
-export type { EventFilter } from './model/eventFilter'
+export type { ChatItem, ChatMessageDto } from './model/types'
+export type { ChatFilter } from './model/chatFilter'
 export { userLabel } from './model/display'
 
 // Moderation (used outside chat widget on GoLivePage)

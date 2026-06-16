@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { Socket } from 'socket.io-client'
 import { extractSlowModeSeconds, readSlowModeFromMessage } from '../model/chatSettings'
-import { mergeMessages, upsertMessage, toRoomEvent } from '../model/mergeMessages'
-import type { ChatMessageDto, RoomEvent } from '../model/types'
+import { mergeMessages, toChatItem, upsertMessage } from '../model/mergeMessages'
+import type { ChatItem, ChatMessageDto } from '../model/types'
 import { attachRoomSocket, emitChatMessage } from '../socket/createRoomSocket'
 import type { PrivateRequestStatus, RoomSocketCallbacks } from '../socket/types'
 
@@ -28,7 +28,7 @@ export function useRoomSocket(
   options?: UseRoomSocketOptions,
 ) {
   const navigate = useNavigate()
-  const [messages, setMessages] = useState<RoomEvent[]>([])
+  const [messages, setMessages] = useState<ChatItem[]>([])
   const [viewerCount, setViewerCount] = useState<number | null>(null)
   const [pinnedMessage, setPinnedMessage] = useState<ChatMessageDto | null>(null)
   const [slowModeSeconds, setSlowModeSeconds] = useState(0)
@@ -51,7 +51,7 @@ export function useRoomSocket(
 
   useEffect(() => {
     if (initialMessages.length === 0) return
-    setMessages((prev) => mergeMessages(prev, initialMessages.map((m) => toRoomEvent(m))))
+    setMessages((prev) => mergeMessages(prev, initialMessages.map((m) => toChatItem(m))))
     setSlowModeSeconds(extractSlowModeSeconds(initialMessages))
   }, [initialMessages])
 
@@ -67,7 +67,7 @@ export function useRoomSocket(
       upsertMessage: (message, amountTokens) => {
         const slowMode = readSlowModeFromMessage(message)
         if (slowMode !== undefined) setSlowModeSeconds(slowMode)
-        setMessages((prev) => upsertMessage(prev, toRoomEvent(message, amountTokens)))
+        setMessages((prev) => upsertMessage(prev, toChatItem(message, amountTokens)))
       },
       markMessageDeleted: (messageId, deletedAt) => {
         setMessages((prev) =>
@@ -108,7 +108,7 @@ export function useRoomSocket(
           setSending(false)
           if (result?.ok) {
             if (result.message) {
-              setMessages((prev) => upsertMessage(prev, toRoomEvent(result.message!)))
+              setMessages((prev) => upsertMessage(prev, toChatItem(result.message!)))
             }
             resolve()
             return
