@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { Socket } from 'socket.io-client'
+import { extractSlowModeSeconds, readSlowModeFromMessage } from '../model/chatSettings'
 import { mergeMessages, upsertMessage, toRoomEvent } from '../model/mergeMessages'
 import type { ChatMessageDto, RoomEvent } from '../model/types'
 import { attachRoomSocket, emitChatMessage } from '../socket/createRoomSocket'
@@ -25,6 +26,7 @@ export function useRoomSocket(
   const [messages, setMessages] = useState<RoomEvent[]>([])
   const [viewerCount, setViewerCount] = useState<number | null>(null)
   const [pinnedMessage, setPinnedMessage] = useState<ChatMessageDto | null>(null)
+  const [slowModeSeconds, setSlowModeSeconds] = useState(0)
   const [vipUserIds, setVipUserIds] = useState<Set<string>>(() => new Set())
   const [privateRequestStatus, setPrivateRequestStatus] = useState<PrivateRequestStatus>('IDLE')
   const [connected, setConnected] = useState(false)
@@ -36,6 +38,7 @@ export function useRoomSocket(
   useEffect(() => {
     if (initialMessages.length === 0) return
     setMessages((prev) => mergeMessages(prev, initialMessages.map((m) => toRoomEvent(m))))
+    setSlowModeSeconds(extractSlowModeSeconds(initialMessages))
   }, [initialMessages])
 
   useEffect(() => {
@@ -45,8 +48,11 @@ export function useRoomSocket(
       setConnected,
       setViewerCount,
       setPinnedMessage,
+      setSlowModeSeconds,
       setPrivateRequestStatus,
       upsertMessage: (message, amountTokens) => {
+        const slowMode = readSlowModeFromMessage(message)
+        if (slowMode !== undefined) setSlowModeSeconds(slowMode)
         setMessages((prev) => upsertMessage(prev, toRoomEvent(message, amountTokens)))
       },
       markMessageDeleted: (messageId, deletedAt) => {
@@ -114,6 +120,7 @@ export function useRoomSocket(
     messages,
     viewerCount,
     pinnedMessage,
+    slowModeSeconds,
     vipUserIds,
     connected,
     sending,

@@ -643,7 +643,7 @@ export function GoLivePage() {
     }),
     [onTipCreated, onUserRewarded, onPrivateRequestCreated, onRoomEnded, onMessagePinned],
   )
-  const { messages, viewerCount, pinnedMessage, vipUserIds, markMessageDeleted } = useRoomSocket(
+  const { messages, viewerCount, pinnedMessage, slowModeSeconds, vipUserIds, markMessageDeleted } = useRoomSocket(
     roomId,
     initialMessages,
     socketCallbacks,
@@ -1060,6 +1060,7 @@ export function GoLivePage() {
           <CreatorStudioChat
             messages={messages}
             pinnedMessage={pinnedMessage}
+            slowModeSeconds={slowModeSeconds}
             vipUserIds={vipUserIds}
             eventFilter={eventFilter}
             onEventFilterChange={setEventFilter}

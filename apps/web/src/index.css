@@ -66,3 +66,21 @@ body {
   font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+@keyframes chat-tip-enter {
+  0% {
+    transform: scale(0.98);
+    box-shadow: 0 0 0 0 hsl(38 92% 50% / 0.45);
+  }
+  60% {
+    box-shadow: 0 0 14px hsl(38 92% 50% / 0.35);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.chat-tip-enter {
+  animation: chat-tip-enter 0.65s ease-out;
+}

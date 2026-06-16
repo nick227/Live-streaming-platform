@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client'
 import type { ChatMessageDto } from '../model/types'
-import type { RoomGoal, RoomSocketActions } from './types'
+import type { RoomChatSettingsPayload, RoomGoal, RoomSocketActions } from './types'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
 
@@ -26,9 +26,16 @@ export function attachRoomSocket(
     const deletedAt = payload.message.deletedAt ?? new Date().toISOString()
     actions.markMessageDeleted(payload.message.id, deletedAt)
   }
-  const onMessagePinned = (payload: { pinnedMessage?: ChatMessageDto | null }) => {
-    actions.setPinnedMessage(payload.pinnedMessage ?? null)
-    actions.getCallbacks()?.onMessagePinned?.(payload)
+  const onMessagePinned = (payload: { settings: RoomChatSettingsPayload }) => {
+    actions.setPinnedMessage(payload.settings.pinnedMessage ?? null)
+    actions.setSlowModeSeconds(payload.settings.slowModeSeconds)
+    actions.getCallbacks()?.onMessagePinned?.({ pinnedMessage: payload.settings.pinnedMessage ?? null })
+  }
+  const onChatSettingsUpdated = (payload: { settings: RoomChatSettingsPayload }) => {
+    actions.setSlowModeSeconds(payload.settings.slowModeSeconds)
+    if (payload.settings.pinnedMessage !== undefined) {
+      actions.setPinnedMessage(payload.settings.pinnedMessage ?? null)
+    }
   }
   const onUserRewarded = (payload: { reward: { type: string; userId: string } }) => {
     actions.onUserRewarded(payload)
@@ -81,6 +88,7 @@ export function attachRoomSocket(
   socket.on('tip:created', onTipCreated)
   socket.on('room:message_deleted', onMessageDeleted)
   socket.on('room:message_pinned', onMessagePinned)
+  socket.on('room:chat_settings_updated', onChatSettingsUpdated)
   socket.on('room:user_rewarded', onUserRewarded)
   socket.on('goal:updated', onGoalUpdated)
   socket.on('private:request_created', onPrivateRequestCreated)
@@ -101,6 +109,7 @@ export function attachRoomSocket(
     socket.off('tip:created', onTipCreated)
     socket.off('room:message_deleted', onMessageDeleted)
     socket.off('room:message_pinned', onMessagePinned)
+    socket.off('room:chat_settings_updated', onChatSettingsUpdated)
     socket.off('room:user_rewarded', onUserRewarded)
     socket.off('goal:updated', onGoalUpdated)
     socket.off('private:request_created', onPrivateRequestCreated)

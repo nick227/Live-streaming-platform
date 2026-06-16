@@ -1,6 +1,7 @@
 import { ChatMessageList } from '../message/ChatMessageList'
 import { ChatComposer } from '../composer/ChatComposer'
 import { ChatShell } from '../primitives/ChatShell'
+import { ChatStatusBanner } from '../primitives/ChatStatusBanner'
 import { PinnedMessageBanner } from '../primitives/PinnedMessageBanner'
 import type { ChatMessageDto, RoomEvent } from '../model/types'
 
@@ -8,6 +9,7 @@ export function ViewerChatPanel({
   className,
   messages,
   pinnedMessage,
+  slowModeSeconds = 0,
   vipUserIds,
   canChat,
   connected,
@@ -17,6 +19,7 @@ export function ViewerChatPanel({
   className?: string
   messages: RoomEvent[]
   pinnedMessage?: ChatMessageDto | null
+  slowModeSeconds?: number
   vipUserIds?: ReadonlySet<string>
   canChat: boolean
   connected: boolean
@@ -25,18 +28,30 @@ export function ViewerChatPanel({
 }) {
   const pinnedUserId = pinnedMessage?.user?.id
   const pinnedIsVip = Boolean(pinnedUserId && vipUserIds?.has(pinnedUserId))
+  const hasBanners = slowModeSeconds > 0 || pinnedMessage
 
   return (
     <ChatShell
       className={className}
       connected={connected}
       bannerSlot={
-        pinnedMessage ? (
-          <PinnedMessageBanner message={pinnedMessage} variant="viewer" isVip={pinnedIsVip} />
+        hasBanners ? (
+          <div className="space-y-2 shrink-0">
+            <ChatStatusBanner slowModeSeconds={slowModeSeconds} />
+            {pinnedMessage && (
+              <PinnedMessageBanner message={pinnedMessage} variant="viewer" isVip={pinnedIsVip} />
+            )}
+          </div>
         ) : undefined
       }
       footer={
-        <ChatComposer canChat={canChat} connected={connected} sending={sending} onSend={onSend} />
+        <ChatComposer
+          canChat={canChat}
+          connected={connected}
+          sending={sending}
+          slowModeSeconds={slowModeSeconds}
+          onSend={onSend}
+        />
       }
     >
       <ChatMessageList messages={messages} vipUserIds={vipUserIds} />

@@ -19,12 +19,14 @@ export function ChatMessageRow({
   variant = 'viewer',
   showTimestamp = false,
   isVip = false,
+  isHighlight = false,
   moderationSlot,
 }: {
   event: RoomEvent
   variant?: 'viewer' | 'studio'
   showTimestamp?: boolean
   isVip?: boolean
+  isHighlight?: boolean
   moderationSlot?: ReactNode
 }) {
   const removed = Boolean(event.message.deletedAt)
@@ -39,6 +41,7 @@ export function ChatMessageRow({
         className={cn(
           'group flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-colors',
           isTip ? 'bg-amber-500/8 ring-1 ring-amber-500/15' : 'hover:bg-muted/40',
+          isHighlight && isTip && 'chat-tip-enter',
           removed && 'opacity-40',
         )}
       >
@@ -89,6 +92,7 @@ export function ChatMessageRow({
       className={cn(
         'rounded-lg border px-2.5 py-1.5 text-sm transition-colors',
         viewerRowClassName(event.type),
+        isHighlight && isTip && 'chat-tip-enter',
         removed && 'opacity-60',
       )}
     >

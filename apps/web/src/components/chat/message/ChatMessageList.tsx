@@ -1,5 +1,8 @@
 import { Card, CardContent } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
+import { useHighlightIds } from '../hooks/useHighlightIds'
+import { useMessageWindow } from '../hooks/useMessageWindow'
 import { ChatScrollArea } from '../primitives/ChatScrollArea'
 import type { RoomEvent } from '../model/types'
 import { InlineModerationActions } from '../moderation/InlineModerationActions'
@@ -32,33 +35,49 @@ export function ChatMessageList({
   vipUserIds,
   moderation,
 }: ChatMessageListProps) {
-  const lastMessageId = messages[messages.length - 1]?.message.id
-  const scrollDeps = [messages.length, lastMessageId]
+  const { visible, hiddenCount, hasHidden, loadEarlier } = useMessageWindow(messages)
+  const lastMessageId = visible[visible.length - 1]?.message.id
+  const scrollDeps = [visible.length, lastMessageId, hiddenCount]
+
+  const tipIds = visible.filter((event) => event.type === 'tip').map((event) => event.message.id)
+  const highlightTipIds = useHighlightIds(tipIds)
+
+  const rows = visible.map((event) => (
+    <ChatMessageRow
+      key={event.message.id}
+      event={event}
+      variant={variant}
+      showTimestamp={variant === 'viewer'}
+      isVip={isVipUser(event.message.user?.id, vipUserIds)}
+      isHighlight={event.type === 'tip' && highlightTipIds.has(event.message.id)}
+      moderationSlot={
+        variant === 'studio' && moderation ? (
+          <InlineModerationActions
+            userId={event.message.user?.id ?? undefined}
+            messageId={event.message.id}
+            onUserAction={moderation.onUserAction}
+            onDeleteMessage={moderation.onDeleteMessage}
+            onPinMessage={moderation.onPinMessage}
+          />
+        ) : undefined
+      }
+    />
+  ))
 
   const content =
     messages.length === 0 ? (
       <ChatEmptyState message={emptyMessage ?? defaultEmptyMessage(variant)} variant={variant} />
     ) : (
-      messages.map((event) => (
-        <ChatMessageRow
-          key={event.message.id}
-          event={event}
-          variant={variant}
-          showTimestamp={variant === 'viewer'}
-          isVip={isVipUser(event.message.user?.id, vipUserIds)}
-          moderationSlot={
-            variant === 'studio' && moderation ? (
-              <InlineModerationActions
-                userId={event.message.user?.id ?? undefined}
-                messageId={event.message.id}
-                onUserAction={moderation.onUserAction}
-                onDeleteMessage={moderation.onDeleteMessage}
-                onPinMessage={moderation.onPinMessage}
-              />
-            ) : undefined
-          }
-        />
-      ))
+      <>
+        {hasHidden && (
+          <div className="flex justify-center pb-2">
+            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={loadEarlier}>
+              Load earlier ({hiddenCount})
+            </Button>
+          </div>
+        )}
+        {rows}
+      </>
     )
 
   if (variant === 'viewer') {

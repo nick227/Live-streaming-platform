@@ -77,6 +77,7 @@ export function RoomPage() {
     messages, 
     viewerCount, 
     pinnedMessage,
+    slowModeSeconds,
     vipUserIds,
     connected, 
     sending, 
@@ -112,6 +113,7 @@ export function RoomPage() {
           <ViewerChatPanel
             messages={messages}
             pinnedMessage={pinnedMessage}
+            slowModeSeconds={slowModeSeconds}
             vipUserIds={vipUserIds}
             canChat={viewerState?.canChat ?? true}
             connected={connected}

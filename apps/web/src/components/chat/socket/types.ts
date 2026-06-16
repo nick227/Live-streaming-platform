@@ -19,10 +19,16 @@ export type RoomSocketCallbacks = {
   onMessagePinned?: (payload: { pinnedMessage?: ChatMessageDto | null }) => void
 }
 
+export type RoomChatSettingsPayload = {
+  slowModeSeconds: number
+  pinnedMessage?: ChatMessageDto | null
+}
+
 export type RoomSocketActions = {
   setConnected: (connected: boolean) => void
   setViewerCount: (count: number) => void
   setPinnedMessage: (message: ChatMessageDto | null) => void
+  setSlowModeSeconds: (seconds: number) => void
   setPrivateRequestStatus: (status: PrivateRequestStatus) => void
   upsertMessage: (message: ChatMessageDto, amountTokens?: number) => void
   markMessageDeleted: (messageId: string, deletedAt: string) => void

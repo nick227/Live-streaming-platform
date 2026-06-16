@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
+import { useSlowModeCooldown } from '../hooks/useSlowModeCooldown'
+import { EmotePicker } from './EmotePicker'
 
 const MAX_LENGTH = 500
 
@@ -11,21 +13,28 @@ export function ChatComposer({
   canChat,
   connected,
   sending,
+  slowModeSeconds = 0,
   onSend,
 }: {
   canChat: boolean
   connected: boolean
   sending: boolean
+  slowModeSeconds?: number
   onSend: (body: string) => Promise<void>
 }) {
   const [draft, setDraft] = useState('')
+  const [lastSentAt, setLastSentAt] = useState<number | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const { cooldownSeconds, isOnCooldown } = useSlowModeCooldown(slowModeSeconds, lastSentAt)
 
-  const disabled = !canChat || !connected || sending
+  const disabled = !canChat || !connected || sending || isOnCooldown
   const placeholder = !canChat
     ? 'Chat is unavailable'
     : !connected
       ? 'Connecting to chat…'
-      : 'Send a message…'
+      : isOnCooldown
+        ? `Slow mode · wait ${cooldownSeconds}s`
+        : 'Send a message…'
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -35,9 +44,18 @@ export function ChatComposer({
     try {
       await onSend(body)
       setDraft('')
+      setLastSentAt(Date.now())
     } catch (error) {
       toast.error((error as Error).message || 'Failed to send message')
     }
+  }
+
+  function insertEmote(emote: string) {
+    setDraft((current) => {
+      const next = `${current}${emote}`
+      return next.length > MAX_LENGTH ? next.slice(0, MAX_LENGTH) : next
+    })
+    inputRef.current?.focus()
   }
 
   const showCounter = draft.length > 0
@@ -49,7 +67,9 @@ export function ChatComposer({
       className="shrink-0 rounded-lg border border-border bg-muted/20 p-2 space-y-1.5"
     >
       <div className="flex gap-2">
+        <EmotePicker disabled={disabled} onSelect={insertEmote} />
         <Input
+          ref={inputRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder={placeholder}
