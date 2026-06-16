@@ -1,7 +1,31 @@
 import type { ChatMessageDto, RoomEvent } from './types'
 
+function createdAtMs(event: RoomEvent) {
+  return Date.parse(event.message.createdAt)
+}
+
 function byCreatedAt(a: RoomEvent, b: RoomEvent) {
-  return new Date(a.message.createdAt).getTime() - new Date(b.message.createdAt).getTime()
+  return createdAtMs(a) - createdAtMs(b)
+}
+
+function mergeEvent(prior: RoomEvent, event: RoomEvent): RoomEvent {
+  return { ...prior, ...event, message: { ...prior.message, ...event.message } } as RoomEvent
+}
+
+function sortedInsert(events: RoomEvent[], event: RoomEvent) {
+  const eventTime = createdAtMs(event)
+  const next = [...events]
+  let low = 0
+  let high = next.length
+
+  while (low < high) {
+    const mid = (low + high) >> 1
+    if (createdAtMs(next[mid]) <= eventTime) low = mid + 1
+    else high = mid
+  }
+
+  next.splice(low, 0, event)
+  return next
 }
 
 export function toRoomEvent(message: ChatMessageDto, amountTokens?: number): RoomEvent {
@@ -23,8 +47,7 @@ export function mergeMessages(existing: RoomEvent[], incoming: RoomEvent[]): Roo
   for (const event of incoming) {
     const prior = map.get(event.message.id)
     if (prior) {
-      // Merge message object
-      map.set(event.message.id, { ...prior, message: { ...prior.message, ...event.message } } as RoomEvent)
+      map.set(event.message.id, mergeEvent(prior, event))
     } else {
       map.set(event.message.id, event)
     }
@@ -34,8 +57,22 @@ export function mergeMessages(existing: RoomEvent[], incoming: RoomEvent[]): Roo
 
 export function upsertMessage(events: RoomEvent[], event: RoomEvent): RoomEvent[] {
   const index = events.findIndex((entry) => entry.message.id === event.message.id)
-  if (index === -1) return [...events, event].sort(byCreatedAt)
+  if (index === -1) {
+    if (events.length === 0 || createdAtMs(events[events.length - 1]) <= createdAtMs(event)) {
+      return [...events, event]
+    }
+    return sortedInsert(events, event)
+  }
+
+  const prior = events[index]
+  const merged = mergeEvent(prior, event)
   const next = [...events]
-  next[index] = { ...next[index], message: { ...next[index].message, ...event.message } } as RoomEvent
-  return next.sort(byCreatedAt)
+  next[index] = merged
+
+  if (prior.message.createdAt === merged.message.createdAt) {
+    return next
+  }
+
+  next.splice(index, 1)
+  return sortedInsert(next, merged)
 }
