@@ -233,11 +233,11 @@ function PublishedTracks({
   const tracks = useTracks([Track.Source.Camera])
 
   useEffect(() => {
-    if (localParticipant) localParticipant.setMicrophoneEnabled(!isMuted).catch(() => {})
+    if (localParticipant) localParticipant.setMicrophoneEnabled(!isMuted).catch(() => { })
   }, [isMuted, localParticipant])
 
   useEffect(() => {
-    if (localParticipant) localParticipant.setCameraEnabled(!isVideoOff).catch(() => {})
+    if (localParticipant) localParticipant.setCameraEnabled(!isVideoOff).catch(() => { })
   }, [isVideoOff, localParticipant])
 
   return (
@@ -387,6 +387,7 @@ interface VideoContainerProps {
   loadingEnd: boolean
   loadingCapture: boolean
   viewerCount: number
+  canStartBroadcast: boolean
 }
 
 function VideoContainer({
@@ -407,6 +408,7 @@ function VideoContainer({
   loadingEnd,
   loadingCapture,
   viewerCount,
+  canStartBroadcast,
 }: VideoContainerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -538,11 +540,17 @@ function VideoContainer({
             <div className="flex items-center gap-2">
               {state === 'PREVIEW_LOCAL' && (
                 <Button
-                  onClick={onGoLive}
+                  onClick={canStartBroadcast ? onGoLive : undefined}
                   loading={loadingGoLive}
-                  className="bg-red-600 hover:bg-red-700 text-white font-bold tracking-wide px-6"
+                  disabled={!canStartBroadcast}
+                  className={cn(
+                    'go-live-indicator font-bold tracking-wide px-6 transition-colors disabled:opacity-100',
+                    canStartBroadcast
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-black text-white hover:bg-black',
+                  )}
                 >
-                  ● Go Live
+                  {canStartBroadcast ? 'Start Broadcast' : 'Get Ready'}
                 </Button>
               )}
               {state === 'STARTING' && (
@@ -552,11 +560,11 @@ function VideoContainer({
                 <Button
                   onClick={onEndRoom}
                   loading={loadingEnd}
-                  variant="destructive"
                   size="sm"
-                  className="font-bold"
+                  className="go-live-indicator bg-red-600 hover:bg-red-700 text-white font-bold tracking-wide"
                 >
-                  End Broadcast
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                  LIVE
                 </Button>
               )}
             </div>
@@ -645,8 +653,10 @@ export function GoLivePage() {
   const onRoomEnded = useCallback(() => {
     toast.info('Broadcast ended')
     setState('ENDED')
-    navigate(-1)
-  }, [navigate])
+    // Always return to the creator go-live screen for this room.
+    // Using history back can land on unrelated pages (e.g. menu items).
+    navigate(`/creator/rooms/${roomId}/go-live`, { replace: true })
+  }, [navigate, roomId])
   const onMessagePinned = useCallback(() => {
     toast.success('Message pinned')
   }, [])
@@ -675,14 +685,14 @@ export function GoLivePage() {
   const privateOptions = privatePresets.some((preset) => preset.value === privateValue)
     ? privatePresets
     : [
-        {
-          label: `${profile?.minPrivateMinutes ?? 5} min - ${profile?.privateRateTokensPerMinute ?? 60} / min`,
-          value: privateValue,
-          minPrivateMinutes: profile?.minPrivateMinutes ?? 5,
-          privateRateTokensPerMinute: profile?.privateRateTokensPerMinute ?? 60,
-        },
-        ...privatePresets,
-      ]
+      {
+        label: `${profile?.minPrivateMinutes ?? 5} min - ${profile?.privateRateTokensPerMinute ?? 60} / min`,
+        value: privateValue,
+        minPrivateMinutes: profile?.minPrivateMinutes ?? 5,
+        privateRateTokensPerMinute: profile?.privateRateTokensPerMinute ?? 60,
+      },
+      ...privatePresets,
+    ]
 
   const { activeViewers, pendingRequests } = useMemo(() => {
     const viewerMap = new Map<string, any>()
@@ -708,6 +718,15 @@ export function GoLivePage() {
   }, [messages, privateReqs?.data])
   const displayViewerCount = viewerCount ?? room?.viewerCount ?? 0
   const isPrivate = state === 'LIVE_PRIVATE'
+  const canStartBroadcast = Boolean(
+    room?.title?.trim() &&
+    room.thumbnailUrl &&
+    editCategory &&
+    editCountryCode &&
+    profile?.status === 'ACTIVE' &&
+    (profile?.privateRateTokensPerMinute ?? 0) > 0 &&
+    (profile?.minPrivateMinutes ?? 0) > 0,
+  )
 
   const elapsedPrivateSeconds = privateStartedAt
     ? Math.max(0, Math.floor((now - privateStartedAt) / 1000))
@@ -717,9 +736,9 @@ export function GoLivePage() {
     : 0
   const privateCapturedEstimate = currentPrivateSession
     ? Math.min(
-        currentPrivateSession.reservedTokens ?? 0,
-        elapsedPrivateMinutes * (currentPrivateSession.rateTokensPerMinute ?? 0),
-      )
+      currentPrivateSession.reservedTokens ?? 0,
+      elapsedPrivateMinutes * (currentPrivateSession.rateTokensPerMinute ?? 0),
+    )
     : 0
   const privateBalanceEstimate = currentPrivateSession
     ? Math.max(0, (currentPrivateSession.reservedTokens ?? 0) - privateCapturedEstimate)
@@ -811,7 +830,6 @@ export function GoLivePage() {
       await endMutation.mutateAsync(roomId!)
       setState('ENDED')
       toast.success('Broadcast ended')
-      navigate(-1)
     } catch {
       setState('LIVE_PUBLIC')
       toast.error('Failed to end room')
@@ -936,9 +954,13 @@ export function GoLivePage() {
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex items-center gap-4">
-              {room.thumbnailUrl && (
-                <img src={room.thumbnailUrl} alt="Thumbnail" className="w-16 h-16 object-cover rounded-lg" />
-              )}
+              <div
+                onClick={handleCaptureThumbnail} 
+                className="w-16 h-16 bg-muted-foreground rounded-lg cursor-pointer">
+                {room.thumbnailUrl && (
+                  <img src={room.thumbnailUrl} alt="Thumbnail" className="w-16 h-16 object-cover rounded-lg" />
+                )}
+              </div>
               <div>
                 <h1 className="text-lg font-bold leading-tight truncate">{room.title}</h1>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -953,15 +975,8 @@ export function GoLivePage() {
               </div>
             </div>
           </div>
-          
-        </div>
 
-        {/* Thumbnail hint — show when previewing and no thumbnail yet */}
-        {state === 'PREVIEW_LOCAL' && !room.thumbnailUrl && (
-          <p className="text-xs text-muted-foreground">
-            No thumbnail yet — use the <Camera className="inline h-3.5 w-3.5" /> button in the video overlay to capture one.
-          </p>
-        )}
+        </div>
 
         {/* Video with floating controls */}
         <div className="space-y-3">
@@ -983,6 +998,7 @@ export function GoLivePage() {
             loadingEnd={endMutation.isPending}
             loadingCapture={captureThumbnail.isPending}
             viewerCount={displayViewerCount}
+            canStartBroadcast={canStartBroadcast}
           />
 
           {state === 'PREVIEW_LOCAL' && (
