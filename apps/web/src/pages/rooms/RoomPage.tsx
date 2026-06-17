@@ -11,6 +11,7 @@ import { Users } from 'lucide-react'
 import { ViewerChatPanel, useRoomSocket, type ChatMessageDto } from '@/components/chat'
 import { LiveRoomLayout } from '@/components/rooms/LiveRoomLayout'
 import { RoomViewerVideo } from '@/components/rooms/RoomViewerVideo'
+import { AudioOnlyStage } from '@/components/rooms/AudioOnlyStage'
 import { ViewerParticipationPanel } from '@/components/rooms/ViewerParticipationPanel'
 
 type RoomDetail = components['schemas']['RoomDetail']
@@ -30,21 +31,39 @@ function RoomVideoPane({
 
   return (
     <div className="relative aspect-video overflow-hidden rounded-xl border border-border bg-muted flex items-center justify-center">
-      <RoomViewerVideo
-        roomId={room.id}
-        isLive={isLive}
-        isReconnecting={isReconnecting}
-        activePrivateSessionId={activePrivateSessionId}
-        fallback={
-          <>
-            {room.thumbnailUrl ? (
-              <img src={room.thumbnailUrl} alt={room.title} className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-4xl text-muted-foreground/20">▶</span>
-            )}
-          </>
-        }
-      />
+      {room.mediaMode === 'AUDIO_ONLY' ? (
+        <AudioOnlyStage
+          roomId={room.id}
+          isLive={isLive}
+          isReconnecting={isReconnecting}
+          activePrivateSessionId={activePrivateSessionId}
+          fallback={
+            <>
+              {room.thumbnailUrl ? (
+                <img src={room.thumbnailUrl} alt={room.title} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-4xl text-muted-foreground/20">▶</span>
+              )}
+            </>
+          }
+        />
+      ) : (
+        <RoomViewerVideo
+          roomId={room.id}
+          isLive={isLive}
+          isReconnecting={isReconnecting}
+          activePrivateSessionId={activePrivateSessionId}
+          fallback={
+            <>
+              {room.thumbnailUrl ? (
+                <img src={room.thumbnailUrl} alt={room.title} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-4xl text-muted-foreground/20">▶</span>
+              )}
+            </>
+          }
+        />
+      )}
       {isLive && (
         <span className="absolute top-3 left-3 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-1 rounded z-10">
           LIVE

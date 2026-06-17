@@ -16,6 +16,13 @@ import { PrivateSessionService } from './PrivateSessionService'
 const liveKitService = new LiveKitService()
 const privateSessionService = new PrivateSessionService()
 
+const FALLBACK_CATEGORIES = [
+  { slug: 'education', label: 'Education' },
+  { slug: 'music', label: 'Music' },
+  { slug: 'business', label: 'Business' },
+  { slug: 'entertainment', label: 'Entertainment' },
+]
+
 export const CREATOR_INCLUDE = {
   select: {
     id: true,
@@ -67,13 +74,6 @@ export type PrepareRoomData = {
 
 export class RoomService {
   async getTaxonomy() {
-    const STATIC_CATEGORIES = [
-      { slug: 'education', label: 'Education' },
-      { slug: 'music', label: 'Music' },
-      { slug: 'business', label: 'Business' },
-      { slug: 'entertainment', label: 'Entertainment' },
-    ]
-
     const [dbCategories, tags] = await Promise.all([
       db.roomCategory
         .findMany({ where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }] })
@@ -85,7 +85,7 @@ export class RoomService {
     ])
 
     const categories: Array<{ slug: string; label: string }> =
-      Array.isArray(dbCategories) && dbCategories.length > 0 ? dbCategories : STATIC_CATEGORIES
+      Array.isArray(dbCategories) && dbCategories.length > 0 ? dbCategories : FALLBACK_CATEGORIES
 
     return {
       categories: categories.map((c) => ({ value: c.slug, label: c.label, slug: c.slug })),
@@ -136,7 +136,7 @@ export class RoomService {
   }) {
     const limit = normalizeLimit(params.limit)
     const cursorPayload = decodeCursor(params.cursor)
-    const categories = params.categories ?? []
+    const categories = this._expandCategoryFilters(params.categories ?? [])
 
     const rooms = await db.room.findMany({
       where: {
@@ -265,10 +265,13 @@ export class RoomService {
     if (data.thumbnailMediaId !== undefined) updateData.thumbnailMediaId = data.thumbnailMediaId
     if (data.coverMediaId !== undefined) updateData.coverMediaId = data.coverMediaId
     if (data.category !== undefined) {
-      if (existing.status === 'LIVE' && data.category !== existing.category) {
+      const sameCategory = this._sameCategory(data.category, existing.category)
+      if (existing.status === 'LIVE' && !sameCategory) {
         throw httpError(400, 'Cannot change category while room is live')
       }
-      updateData.category = await this._resolveCategory(data.category, existing.category)
+      if (!sameCategory || existing.status !== 'LIVE') {
+        updateData.category = await this._resolveCategory(data.category, existing.category)
+      }
     }
     if (data.countryCode !== undefined) {
       if (existing.status === 'LIVE' && data.countryCode !== existing.countryCode) {
@@ -389,11 +392,32 @@ export class RoomService {
 
   private async _resolveCategory(requested: string | undefined, fallback: string | null) {
     if (requested !== undefined) {
-      const cat = await db.roomCategory.findUnique({ where: { slug: requested, isActive: true } })
-      if (!cat) throw httpError(400, 'Invalid room category')
-      return requested
+      const slug = requested.trim()
+      if (!slug) throw httpError(400, 'Invalid room category')
+
+      const candidates = [...new Set([slug, slug.toLowerCase()])]
+      const categories = await db.roomCategory.findMany({
+        where: { slug: { in: candidates }, isActive: true },
+        take: 1,
+      })
+      if (categories[0]) return categories[0].slug
+
+      const fallbackCategory = FALLBACK_CATEGORIES.find(
+        (category) => category.slug.toLowerCase() === slug.toLowerCase(),
+      )
+      if (fallbackCategory) return fallbackCategory.slug
+
+      throw httpError(400, 'Invalid room category')
     }
     return fallback ?? null
+  }
+
+  private _sameCategory(requested: string, existing: string | null) {
+    return existing !== null && requested.trim().toLowerCase() === existing.trim().toLowerCase()
+  }
+
+  private _expandCategoryFilters(categories: string[]) {
+    return [...new Set(categories.flatMap((category) => [category, category.toLowerCase()]))]
   }
 
   private _resolveCountryCode(requested: string | undefined, fallback: string | null) {

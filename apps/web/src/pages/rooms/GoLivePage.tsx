@@ -715,10 +715,16 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
   const [previewError, setPreviewError] = useState<string | null>(null)
   const videoContainerRef = useRef<HTMLDivElement>(null)
 
+  const [saveLocalRecording, setSaveLocalRecording] = useState(false)
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+
   const [editTitle, setEditTitle] = useState('')
   const [editCategory, setEditCategory] = useState('')
   const [editCountryCode, setEditCountryCode] = useState('')
   const [editTagSlugs, setEditTagSlugs] = useState<string[]>([])
+  const [editMediaMode, setEditMediaMode] = useState<string>('VIDEO')
 
   const { data: taxonomyData } = useRoomTaxonomy()
   const taxonomy = taxonomyData?.data
@@ -728,11 +734,14 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
   const { data: meData } = useCurrentUser()
 
   useEffect(() => {
+    if (!room) return
     let cancelled = false
     let stream: MediaStream | null = null
 
+    const wantVideo = room.mediaMode === 'VIDEO'
+
     navigator.mediaDevices
-      .getUserMedia({ video: true, audio: true })
+      .getUserMedia({ video: wantVideo, audio: true })
       .then((nextStream) => {
         if (cancelled) {
           nextStream.getTracks().forEach((track) => track.stop())
@@ -743,14 +752,14 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
         setPreviewError(null)
       })
       .catch(() => {
-        if (!cancelled) setPreviewError('Camera unavailable')
+        if (!cancelled) setPreviewError(wantVideo ? 'Camera unavailable' : 'Microphone unavailable')
       })
 
     return () => {
       cancelled = true
       stream?.getTracks().forEach((track) => track.stop())
     }
-  }, [])
+  }, [room?.mediaMode])
 
   const initializedRef = useRef(false)
   useEffect(() => {
@@ -760,6 +769,7 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
       setEditCategory(room.category ?? '')
       setEditCountryCode(room.countryCode || '')
       setEditTagSlugs(room.tags?.map((t: any) => t.slug) || [])
+      setEditMediaMode(room.mediaMode || 'VIDEO')
     }
   }, [room])
 
@@ -891,14 +901,70 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
   const isPrivate = state === 'LIVE_PRIVATE'
 
   useEffect(() => {
-    if (!isLive) return
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ''
+      if (isLive || (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive')) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isLive])
+
+  useEffect(() => {
+    if (!saveLocalRecording || !previewStream) return
+
+    if (state === 'LIVE_PUBLIC') {
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        try {
+          const streamToRecord = new MediaStream()
+          if (room?.mediaMode === 'VIDEO') {
+            previewStream.getTracks().forEach((track) => streamToRecord.addTrack(track))
+          } else {
+            previewStream.getAudioTracks().forEach((track) => streamToRecord.addTrack(track))
+          }
+
+          let recorder: MediaRecorder
+          const mimeType = 'video/webm;codecs=vp9,opus'
+          try {
+            if (MediaRecorder.isTypeSupported(mimeType)) {
+              recorder = new MediaRecorder(streamToRecord, { mimeType })
+            } else {
+              recorder = new MediaRecorder(streamToRecord, { mimeType: 'video/webm' })
+            }
+          } catch {
+            recorder = new MediaRecorder(streamToRecord, { mimeType: 'video/webm' })
+          }
+
+          recordedChunksRef.current = []
+          recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) recordedChunksRef.current.push(event.data)
+          }
+          recorder.onstop = () => {
+            if (recordedChunksRef.current.length > 0) {
+              const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
+              const url = URL.createObjectURL(blob)
+              setDownloadUrl(url)
+            }
+          }
+          mediaRecorderRef.current = recorder
+          recorder.start(5000)
+        } catch (err) {
+          toast.error('Local recording failed to start: ' + (err as Error).message)
+        }
+      } else if (mediaRecorderRef.current.state === 'paused') {
+        mediaRecorderRef.current.resume()
+      }
+    } else if (state === 'LIVE_PRIVATE') {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.pause()
+      }
+    } else if (state === 'ENDING' || state === 'ENDED' || state === 'PREVIEW_LOCAL') {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
+    }
+  }, [state, saveLocalRecording, previewStream, room?.mediaMode])
 
   const canStartBroadcast = Boolean(
     room?.title?.trim() &&
@@ -957,9 +1023,18 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
     void autosaveRoomDetails({ category: value })
   }
 
-  function handleCountryChange(value: string) {
-    setEditCountryCode(value)
-    void autosaveRoomDetails({ countryCode: value })
+  const handleCountryChange = (val: string) => {
+    setEditCountryCode(val)
+    if (val !== room?.countryCode) {
+      updateRoomMutation.mutate({ roomId: roomId!, countryCode: val || undefined }).catch(() => {})
+    }
+  }
+
+  const handleMediaModeChange = (val: string) => {
+    setEditMediaMode(val)
+    if (val !== room?.mediaMode) {
+      updateRoomMutation.mutate({ roomId: roomId!, mediaMode: val }).catch(() => {})
+    }
   }
 
   function toggleEditTag(slug: string) {
@@ -996,7 +1071,25 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
 
   const handleGoLive = async () => {
     try {
+      setDownloadUrl(null)
       setState('STARTING')
+      const tagsChanged = JSON.stringify(editTagSlugs) !== JSON.stringify(room.tags?.map((t: any) => t.slug) || [])
+      const modeChanged = editMediaMode !== room.mediaMode
+      const titleChanged = editTitle !== room.title
+      const categoryChanged = editCategory !== room.category
+      const countryChanged = editCountryCode !== room.countryCode
+
+      if (titleChanged || categoryChanged || countryChanged || tagsChanged || modeChanged) {
+        await updateRoomMutation.mutateAsync({
+          roomId: roomId!,
+          title: editTitle,
+          category: editCategory || undefined,
+          countryCode: editCountryCode || undefined,
+          tagSlugs: editTagSlugs,
+          mediaMode: editMediaMode,
+        })
+      }
+
       const res = await goLiveMutation.mutateAsync(roomId!)
       if (!livekitToken) {
         setLivekitToken((res as any).data.livekitToken)
@@ -1281,6 +1374,26 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
       controls={
         (state === 'PREVIEW_LOCAL' || state === 'ENDED') && (
           <div className="space-y-3">
+            {downloadUrl && (
+              <div className="rounded-xl border border-green-500/30 bg-green-950/40 p-4 text-center">
+                <p className="mb-2 text-sm font-semibold text-green-300">Your recording is ready.</p>
+                {(() => {
+                  const slugifiedTitle = (room?.title || editTitle || roomId!).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+                  const dateString = new Date().toISOString().split('T')[0]
+                  const downloadFilename = `streamyolo-${slugifiedTitle}-${dateString}.webm`
+                  return (
+                    <a
+                      href={downloadUrl}
+                      download={downloadFilename}
+                      className="inline-block rounded bg-green-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-green-700"
+                    >
+                      Download recording
+                    </a>
+                  )
+                })()}
+              </div>
+            )}
+
             <Button
               variant="default"
               size="lg"
@@ -1293,7 +1406,17 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
             </Button>
 
             <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                <LabeledSelect
+                  id="mediaMode"
+                  label=""
+                  value={editMediaMode}
+                  options={[
+                    { label: 'VIDEO', value: 'VIDEO' },
+                    { label: 'AUDIO ONLY', value: 'AUDIO_ONLY' },
+                  ]}
+                  onChange={handleMediaModeChange}
+                />
                 <LabeledSelect
                   id="category"
                   label=""
@@ -1325,6 +1448,27 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
                   onToggle={toggleEditTag}
                   placeholder="Tags"
                 />
+              </div>
+              <div className="flex flex-col gap-2 border-t border-border pt-3 mt-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="saveLocalRecording"
+                    checked={saveLocalRecording}
+                    onChange={(e) => setSaveLocalRecording(e.target.checked)}
+                    className="h-4 w-4 rounded border-input-border bg-background focus:ring-2 focus:ring-ring"
+                  />
+                  <label htmlFor="saveLocalRecording" className="text-sm font-medium">
+                    Save a local copy of my broadcast
+                  </label>
+                </div>
+                {saveLocalRecording && (
+                  <p className="text-xs text-muted-foreground ml-6">
+                    Recording locally. Keep this tab open until your download is ready.
+                    <br />
+                    Local recording pauses during private sessions.
+                  </p>
+                )}
               </div>
             </div>
           </div>

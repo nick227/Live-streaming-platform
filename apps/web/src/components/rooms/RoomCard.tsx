@@ -15,6 +15,7 @@ interface RoomCardProps {
     slug?: string | null
     title: string
     status: string
+    mediaMode?: string
     viewerCount?: number
     thumbnailUrl?: string | null
     category?: string | null
@@ -48,7 +49,7 @@ export function RoomCard({ room }: RoomCardProps) {
           )}
           {isLive && (
             <span className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-0.5 rounded">
-              LIVE
+              {room.mediaMode === 'AUDIO_ONLY' ? 'LIVE AUDIO' : 'LIVE'}
             </span>
           )}
           {room.category && (
