@@ -4,6 +4,7 @@ import { useCreatorProfile, usePrepareRoom } from '@streamyolo/sdk'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { GoLivePage } from './GoLivePage'
+import { getRandomRoomName } from './getRandomRoomName'
 
 function StudioLoading() {
   return (
@@ -26,7 +27,7 @@ export function PrepareRoomPage() {
     async function createAndRedirect() {
       try {
         const result = await mutation.mutateAsync({
-          title: 'Untitled Broadcast',
+          title: getRandomRoomName(),
           visibility: 'PUBLIC',
           saveAsDefaults: false,
         })
@@ -67,7 +68,7 @@ export function StudioPage() {
     async function createRoom() {
       try {
         const result = await mutation.mutateAsync({
-          title: 'Untitled Broadcast',
+          title: getRandomRoomName(),
           visibility: 'PUBLIC',
           saveAsDefaults: false,
         })

@@ -37,16 +37,16 @@ export function RequestPrivateSessionPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
-      await mutation.mutateAsync({ roomId: roomId!, ...(message ? { message } : {}) })
+      await mutation.mutateAsync({ roomId: roomId!, ...(message ? { note: message } : {}) })
       toast.success('Session requested — waiting for creator to accept')
       navigate(-1)
-    } catch {
-      toast.error('Failed to request session')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to request session')
     }
   }
 
   return (
-    <div className="space-y-6 max-w-md">
+    <div className="space-y-6 max-w-md mx-auto">
       <div>
         <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           ← Back
@@ -65,7 +65,7 @@ export function RequestPrivateSessionPage() {
             <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
             <span>Minimum <strong>{minMinutes}</strong> minute{minMinutes !== 1 ? 's' : ''} · <strong>{minCost.toLocaleString()}</strong> tokens minimum</span>
           </div>
-          {room.privateViewerCamRequired && (
+          {room.privateViewerCamMode === 'REQUIRED' && (
             <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
               <Camera className="h-4 w-4 shrink-0" />
               <span>Your camera is required for this private session</span>

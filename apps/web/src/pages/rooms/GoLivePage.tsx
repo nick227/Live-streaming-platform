@@ -26,6 +26,13 @@ import {
   useCurrentUser,
 } from '@streamyolo/sdk'
 import { Button } from '@/components/ui/Button'
+import { LiveRoomLayout } from '@/components/rooms/LiveRoomLayout'
+import {
+  LiveRoomHeader,
+  LiveRoomHeaderMedia,
+  liveRoomLinkClassName,
+  liveRoomTitleClassName,
+} from '@/components/rooms/LiveRoomHeader'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LiveKitRoom, VideoTrack, useLocalParticipant, useRoomContext } from '@livekit/components-react'
@@ -52,7 +59,6 @@ import {
 } from '@/components/chat'
 import { captureVideoFrameAsFormData } from '@/lib/captureVideoFrame'
 import { MAX_ROOM_TAGS } from '@streamyolo/shared/room-taxonomy'
-import type { RoomCategory } from '@streamyolo/shared/room-taxonomy'
 
 const privatePresets = [
   { label: '5 min - 60 tokens', value: '5:60', minPrivateMinutes: 5, privateRateTokensPerMinute: 60 },
@@ -241,6 +247,10 @@ function PublishPreviewTracks({
   useEffect(() => {
     if (!stream || publishedRef.current === stream) return
 
+    // Claim synchronously so a StrictMode remount (or any re-run while async is
+    // in-flight) hits the guard above and exits early without re-publishing.
+    publishedRef.current = stream
+
     let cancelled = false
     const videoTrack = stream.getVideoTracks()[0]
     const audioTrack = stream.getAudioTracks()[0]
@@ -261,9 +271,9 @@ function PublishPreviewTracks({
             stream: 'camera',
           })
         }
-        if (!cancelled) publishedRef.current = stream
       } catch (err) {
         if (!cancelled) {
+          publishedRef.current = null  // allow retry on next stream
           onError(err instanceof Error ? err.message : 'Failed to publish camera')
         }
       }
@@ -700,12 +710,13 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
   const [eventFilter, setEventFilter] = useState<ChatFilter>('CHAT')
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoOff, setIsVideoOff] = useState(false)
+  const [mutedViewerUserIds, setMutedViewerUserIds] = useState<Set<string>>(() => new Set())
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const videoContainerRef = useRef<HTMLDivElement>(null)
 
   const [editTitle, setEditTitle] = useState('')
-  const [editCategory, setEditCategory] = useState<RoomCategory | ''>('')
+  const [editCategory, setEditCategory] = useState('')
   const [editCountryCode, setEditCountryCode] = useState('')
   const [editTagSlugs, setEditTagSlugs] = useState<string[]>([])
 
@@ -746,12 +757,7 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
     if (room && !initializedRef.current) {
       initializedRef.current = true
       setEditTitle(room.title || '')
-      const category = room.category
-      setEditCategory(
-        category === 'MALE' || category === 'FEMALE' || category === 'COUPLES' || category === 'TRANS'
-          ? category
-          : '',
-      )
+      setEditCategory(room.category ?? '')
       setEditCountryCode(room.countryCode || '')
       setEditTagSlugs(room.tags?.map((t: any) => t.slug) || [])
     }
@@ -808,7 +814,12 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
   }, [queryClient, roomId])
   const onRoomEnded = useCallback(() => {
     toast.info('Broadcast ended')
+    queryClient.setQueryData(['creator-profile'], (old: any) => {
+      if (!old?.data) return old
+      return { ...old, data: { ...old.data, isLive: false, currentRoomId: null } }
+    })
     queryClient.invalidateQueries({ queryKey: ['rooms'] })
+    queryClient.invalidateQueries({ queryKey: ['creator-profile'] })
     setLivekitToken(null)
     setLivekitUrl(null)
     setCurrentPrivateSession(null)
@@ -831,7 +842,7 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
     [onTipCreated, onUserRewarded, onPrivateRequestCreated, onRoomEnded, onMessagePinned],
   )
   const initialVipUserIds = roomData?.data?.vipUserIds
-  const { messages, viewerCount, pinnedMessage, slowModeSeconds, vipUserIds, markMessageDeleted } = useRoomSocket(
+  const { messages, viewerCount, pinnedMessage, slowModeSeconds, vipUserIds, connected, sending, sendMessage, markMessageDeleted, markUserRewarded } = useRoomSocket(
     roomId,
     initialMessages,
     socketCallbacks,
@@ -921,7 +932,7 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
 
   async function autosaveRoomDetails(next: {
     title?: string
-    category?: RoomCategory
+    category?: string
     countryCode?: string
     tagSlugs?: string[]
   }) {
@@ -942,9 +953,8 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
   }
 
   function handleCategoryChange(value: string) {
-    const next = value as RoomCategory
-    setEditCategory(next)
-    void autosaveRoomDetails({ category: next })
+    setEditCategory(value)
+    void autosaveRoomDetails({ category: value })
   }
 
   function handleCountryChange(value: string) {
@@ -1017,18 +1027,17 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
     }
   }
 
-  // Called when LiveKit disconnects. Only fires endRoom if we're actually live —
-  // guards against double-calling after intentional handleEndRoom.
+  // LiveKit dropped — clear local video state and let the server's Socket.IO 45s
+  // grace timer decide whether to end the room. Calling endRoom here would race
+  // against page-refresh cleanup and kill the broadcast before the creator can
+  // reconnect.
   const handleDisconnect = useCallback(() => {
-    if (broadcastStateRef.current === 'LIVE_PUBLIC' || broadcastStateRef.current === 'LIVE_PRIVATE') {
-      endMutation.mutateAsync(roomId!).catch(() => {})
-    }
     setLivekitToken(null)
     setLivekitUrl(null)
     setCurrentPrivateSession(null)
     setPrivateStartedAt(null)
     setState('PREVIEW_LOCAL')
-  }, [endMutation, roomId])
+  }, [])
 
   const handleAcceptPrivate = async (sessionId: string) => {
     try {
@@ -1084,9 +1093,10 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
     }
   }
 
-  async function runModeration(label: string, action: () => Promise<unknown>) {
+  async function runModeration(label: string, action: () => Promise<unknown>, onSuccess?: () => void) {
     try {
       await action()
+      onSuccess?.()
       toast.success(label)
     } catch (error) {
       toast.error((error as Error).message || 'Moderation action failed')
@@ -1101,9 +1111,19 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
     if (action === 'mute') {
       runModeration('Viewer muted', () =>
         muteMutation.mutateAsync({ ...base, durationSeconds: 5 * 60 }),
+        () => setMutedViewerUserIds((prev) => new Set(prev).add(targetUserId)),
       )
     } else if (action === 'unmute') {
-      runModeration('Viewer unmuted', () => unmuteMutation.mutateAsync(base))
+      runModeration(
+        'Viewer unmuted',
+        () => unmuteMutation.mutateAsync(base),
+        () =>
+          setMutedViewerUserIds((prev) => {
+            const next = new Set(prev)
+            next.delete(targetUserId)
+            return next
+          }),
+      )
     } else if (action === 'kick') {
       runModeration('Viewer kicked', () => kickMutation.mutateAsync(base))
     } else if (action === 'ban') {
@@ -1117,6 +1137,7 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
           type: rewardType,
           note: 'Live room control',
         }),
+        () => markUserRewarded({ type: rewardType, userId: targetUserId }),
       )
     }
   }
@@ -1138,284 +1159,247 @@ export function GoLivePage({ studioRoomId }: { studioRoomId?: string } = {}) {
     return <div className="p-8 text-muted-foreground animate-pulse">Loading studio…</div>
   }
 
+  const renderChat = () => (
+    <CreatorStudioChat
+      messages={messages}
+      pinnedMessage={pinnedMessage}
+      slowModeSeconds={slowModeSeconds}
+      mutedUserIds={mutedViewerUserIds}
+      vipUserIds={vipUserIds}
+      connected={connected}
+      sending={sending}
+      eventFilter={eventFilter}
+      onEventFilterChange={setEventFilter}
+      onSend={sendMessage}
+      onUserAction={handleUserAction}
+      onDeleteMessage={handleDeleteMessage}
+      onPinMessage={handlePinMessage}
+    />
+  )
+
+  const renderViewerRows = () =>
+    activeViewers.map((viewer) => (
+      <div
+        key={viewer.id}
+        className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40"
+      >
+        <span className="truncate text-sm font-medium">{userLabel(viewer)}</span>
+        <ModerationActionBar
+          userId={viewer.id}
+          isMuted={mutedViewerUserIds.has(viewer.id)}
+          isVip={vipUserIds.has(viewer.id)}
+          onUserAction={handleUserAction}
+        />
+      </div>
+    ))
+
+  const activeViewersDesktop = activeViewers.length > 0 && (
+    <div className="shrink-0 space-y-2 border-t border-border p-3">
+      <h2 className="px-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Recent Viewers ({activeViewers.length})
+      </h2>
+      <div className="max-h-36 space-y-0.5 overflow-y-auto">{renderViewerRows()}</div>
+    </div>
+  )
+
+  const activeViewersMobile = activeViewers.length > 0 && (
+    <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+      <h2 className="px-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Recent Viewers ({activeViewers.length})
+      </h2>
+      <div className="max-h-36 space-y-0.5 overflow-y-auto">{renderViewerRows()}</div>
+    </div>
+  )
+
   return (
-    <>
-      {/* ── Broadcast content — centered against full viewport ── */}
-      <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col gap-4">
-      <div className="flex flex-col gap-4 broadcast-section">
-
-        {/* Room header */}
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0 flex items-center gap-4">
-              <div
-                onClick={handleCaptureThumbnail} 
-                className="w-16 h-16 bg-muted-foreground rounded-lg cursor-pointer">
-                {room.thumbnailUrl && (
-                  <img src={room.thumbnailUrl} alt="Thumbnail" className="w-16 h-16 object-cover rounded-lg" />
-                )}
-              </div>
-              <div>
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  onBlur={handleTitleBlur}
-                  placeholder="Enter room title..."
-                  className="w-full bg-transparent text-lg font-bold leading-tight truncate border-none outline-none focus:ring-0 p-0 placeholder-muted-foreground/50"
-                />
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {isPrivate
-                    ? 'Private session active'
-                    : state === 'LIVE_PUBLIC'
-                      ? 'Broadcasting live'
-                      : state === 'STARTING'
-                        ? 'Starting broadcast…'
-                        : 'Ready to broadcast'}
-                </p>
-                {meData?.data?.user?.username && (
-                  <div className="mt-1">
-                    <a 
-                      href={`/${meData.data.user.username}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-muted-foreground hover:text-primary transition-colors inline-block"
-                    >
-                      {window.location.origin}/{meData.data.user.username}
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Video with floating controls */}
-        <div className="space-y-3">
-          <VideoContainer
-            state={state}
-            livekitToken={livekitToken}
-            livekitUrl={livekitUrl}
-            isMuted={isMuted}
-            isVideoOff={isVideoOff}
-            containerRef={videoContainerRef}
-            onToggleMute={() => setIsMuted((m) => !m)}
-            onToggleVideo={() => setIsVideoOff((v) => !v)}
-            onGoLive={handleGoLive}
-            onEndRoom={handleEndRoom}
-            onCaptureThumbnail={handleCaptureThumbnail}
-            onDisconnect={handleDisconnect}
-            loadingGoLive={goLiveMutation.isPending}
-            loadingEnd={endMutation.isPending}
-            loadingCapture={captureThumbnail.isPending}
-            viewerCount={displayViewerCount}
-            canStartBroadcast={canStartBroadcast}
-            previewStream={previewStream}
-            previewError={previewError}
-          />
-
-          {(state === 'PREVIEW_LOCAL' || state === 'ENDED') && (
-            <div className="space-y-3">
-              <Button
-                variant="default"
-                size="lg"
-                onClick={handleCaptureThumbnail}
-                loading={captureThumbnail.isPending}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md border-0 py-6 text-lg font-bold transition-all"
-              >
-                <Camera className="h-6 w-6" />
-                Capture Room Thumbnail
-              </Button>
-
-              <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <LabeledSelect
-                    id="category"
-                    label=""
-                    value={editCategory}
-                    options={taxonomy?.categories.map((c) => ({ label: c.label, value: c.value })) ?? []}
-                    onChange={handleCategoryChange}
-                    placeholder="Select"
-                  />
-                  <LabeledSelect
-                    id="countryCode"
-                    label=""
-                    value={editCountryCode}
-                    options={taxonomy?.countries.map((c) => ({ label: c.name, value: c.code })) ?? []}
-                    onChange={handleCountryChange}
-                    placeholder="Select"
-                  />
-                  <LabeledSelect
-                    id="privatePreset"
-                    label=""
-                    value={privateValue}
-                    options={privateOptions.map((p) => ({ label: p.label, value: p.value }))}
-                    onChange={handlePrivatePresetChange}
-                    placeholder="Private Rate"
-                  />
-                  <MultiSelectDropdown
-                    label=""
-                    options={taxonomy?.tags.map((t) => ({ label: t.label, value: t.slug })) ?? []}
-                    selectedValues={editTagSlugs}
-                    onToggle={toggleEditTag}
-                    placeholder="Tags"
-                  />
-                </div>
-
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Private session status bar */}
-        {state === 'LIVE_PRIVATE' && currentPrivateSession && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-purple-500/30 bg-purple-950/40 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Lock className="h-4 w-4 text-purple-400" />
-              <span className="text-sm font-semibold text-purple-300">Private Session</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-5 text-sm">
-              <span className="text-muted-foreground">
-                <span className="font-semibold text-foreground">
-                  {currentPrivateSession.rateTokensPerMinute}
-                </span>{' '}
-                tkns/min
-              </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" />
-                <span className="font-semibold text-foreground tabular-nums">
-                  {formatElapsed(elapsedPrivateSeconds)}
-                </span>
-              </span>
-              <span className="text-muted-foreground">
-                Captured:{' '}
-                <span className="font-semibold text-green-400">{privateCapturedEstimate}</span>
-              </span>
-              <span className="text-muted-foreground">
-                Reserve:{' '}
-                <span className="font-semibold text-foreground">{privateBalanceEstimate}</span>
-              </span>
-            </div>
-            <Button
-              variant="destructive"
-              size="sm"
-              loading={endPrivateMutation.isPending}
-              onClick={handleEndPrivate}
-            >
-              End Private
-            </Button>
-          </div>
-        )}
-
-        {/* Pending private requests */}
-        {pendingRequests.length > 0 && (
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Private Requests ({pendingRequests.length})
-            </h2>
-            {pendingRequests.map((req: any) => (
-              <div
-                key={req.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/30 border border-border px-3 py-2.5"
-              >
-                <div>
-                  <p className="text-sm font-semibold">
-                    {userLabel(req.viewer ?? { id: req.viewerId })}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {req.minMinutes} min · {req.rateTokensPerMinute} tkns/min
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <ModerationActionBar
-                    userId={req.viewer?.id ?? req.viewerId}
-                    onUserAction={handleUserAction}
-                  />
-                  <Button
-                    size="sm"
-                    onClick={() => handleAcceptPrivate(req.id)}
-                    loading={acceptMutation.isPending}
-                  >
-                    Accept
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-        {/* Mobile: chat inline below broadcast */}
-        <div className="flex flex-col gap-4 lg:hidden">
-          <div className="flex-1 min-h-0 flex flex-col">
-            <CreatorStudioChat
-              messages={messages}
-              pinnedMessage={pinnedMessage}
-              slowModeSeconds={slowModeSeconds}
-              vipUserIds={vipUserIds}
-              eventFilter={eventFilter}
-              onEventFilterChange={setEventFilter}
-              onUserAction={handleUserAction}
-              onDeleteMessage={handleDeleteMessage}
-              onPinMessage={handlePinMessage}
+    <LiveRoomLayout
+      header={
+        <LiveRoomHeader
+          media={
+            <LiveRoomHeaderMedia
+              src={room.thumbnailUrl}
+              alt="Thumbnail"
+              onClick={handleCaptureThumbnail}
             />
-          </div>
-          {activeViewers.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-3 space-y-2">
-              <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-1">
-                Recent Viewers ({activeViewers.length})
-              </h2>
-              <div className="space-y-0.5 max-h-36 overflow-y-auto">
-                {activeViewers.map((viewer) => (
-                  <div
-                    key={viewer.id}
-                    className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/40 transition-colors"
-                  >
-                    <span className="text-sm font-medium truncate">{userLabel(viewer)}</span>
-                    <ModerationActionBar userId={viewer.id} onUserAction={handleUserAction} />
-                  </div>
-                ))}
+          }
+          title={
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              placeholder="Enter room title..."
+              className={liveRoomTitleClassName}
+            />
+          }
+          link={
+            meData?.data?.user?.username ? (
+              <a
+                href={`/${meData.data.user.username}`}
+                target="_blank"
+                rel="noreferrer"
+                className={liveRoomLinkClassName}
+              >
+                {window.location.origin}/{meData.data.user.username}
+              </a>
+            ) : null
+          }
+          status={
+            isPrivate
+              ? 'Private session active'
+              : state === 'LIVE_PUBLIC'
+                ? 'Broadcasting live'
+                : state === 'STARTING'
+                  ? 'Starting broadcast...'
+                  : 'Ready to broadcast'
+          }
+        />
+      }
+      video={
+        <VideoContainer
+          state={state}
+          livekitToken={livekitToken}
+          livekitUrl={livekitUrl}
+          isMuted={isMuted}
+          isVideoOff={isVideoOff}
+          containerRef={videoContainerRef}
+          onToggleMute={() => setIsMuted((m) => !m)}
+          onToggleVideo={() => setIsVideoOff((v) => !v)}
+          onGoLive={handleGoLive}
+          onEndRoom={handleEndRoom}
+          onCaptureThumbnail={handleCaptureThumbnail}
+          onDisconnect={handleDisconnect}
+          loadingGoLive={goLiveMutation.isPending}
+          loadingEnd={endMutation.isPending}
+          loadingCapture={captureThumbnail.isPending}
+          viewerCount={displayViewerCount}
+          canStartBroadcast={canStartBroadcast}
+          previewStream={previewStream}
+          previewError={previewError}
+        />
+      }
+      controls={
+        (state === 'PREVIEW_LOCAL' || state === 'ENDED') && (
+          <div className="space-y-3">
+            <Button
+              variant="default"
+              size="lg"
+              onClick={handleCaptureThumbnail}
+              loading={captureThumbnail.isPending}
+              className="flex w-full items-center justify-center gap-2 border-0 bg-gradient-to-r from-blue-600 to-indigo-600 py-6 text-lg font-bold text-white shadow-md transition-all hover:from-blue-700 hover:to-indigo-700"
+            >
+              <Camera className="h-6 w-6" />
+              Capture Room Thumbnail
+            </Button>
+
+            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <LabeledSelect
+                  id="category"
+                  label=""
+                  value={editCategory}
+                  options={taxonomy?.categories.map((c) => ({ label: c.label, value: c.value })) ?? []}
+                  onChange={handleCategoryChange}
+                  placeholder="Select"
+                />
+                <LabeledSelect
+                  id="countryCode"
+                  label=""
+                  value={editCountryCode}
+                  options={taxonomy?.countries.map((c) => ({ label: c.name, value: c.code })) ?? []}
+                  onChange={handleCountryChange}
+                  placeholder="Select"
+                />
+                <LabeledSelect
+                  id="privatePreset"
+                  label=""
+                  value={privateValue}
+                  options={privateOptions.map((p) => ({ label: p.label, value: p.value }))}
+                  onChange={handlePrivatePresetChange}
+                  placeholder="Private Rate"
+                />
+                <MultiSelectDropdown
+                  label=""
+                  options={taxonomy?.tags.map((t) => ({ label: t.label, value: t.slug })) ?? []}
+                  selectedValues={editTagSlugs}
+                  onToggle={toggleEditTag}
+                  placeholder="Tags"
+                />
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Fixed chat panel (desktop only) — out of DOM flow ── */}
-      <div className="hidden lg:flex fixed right-0 top-14 h-[calc(100vh-3.5rem)] w-[360px] xl:w-[400px] flex-col border-l border-border bg-background z-10">
-        <div className="flex-1 min-h-0 flex flex-col p-3">
-          <CreatorStudioChat
-            messages={messages}
-            pinnedMessage={pinnedMessage}
-            slowModeSeconds={slowModeSeconds}
-            vipUserIds={vipUserIds}
-            eventFilter={eventFilter}
-            onEventFilterChange={setEventFilter}
-            onUserAction={handleUserAction}
-            onDeleteMessage={handleDeleteMessage}
-            onPinMessage={handlePinMessage}
-          />
-        </div>
-        {activeViewers.length > 0 && (
-          <div className="shrink-0 border-t border-border p-3 space-y-2">
-            <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-1">
-              Recent Viewers ({activeViewers.length})
-            </h2>
-            <div className="space-y-0.5 max-h-36 overflow-y-auto">
-              {activeViewers.map((viewer) => (
-                <div
-                  key={viewer.id}
-                  className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/40 transition-colors"
-                >
-                  <span className="text-sm font-medium truncate">{userLabel(viewer)}</span>
-                  <ModerationActionBar userId={viewer.id} onUserAction={handleUserAction} />
-                </div>
-              ))}
-            </div>
           </div>
-        )}
-      </div>
-    </>
+        )
+      }
+      chat={renderChat}
+      sideRailFooter={activeViewersDesktop}
+      mobileSideRailFooter={activeViewersMobile}
+    >
+      {state === 'LIVE_PRIVATE' && currentPrivateSession && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-purple-500/30 bg-purple-950/40 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Lock className="h-4 w-4 text-purple-400" />
+            <span className="text-sm font-semibold text-purple-300">Private Session</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-5 text-sm">
+            <span className="text-muted-foreground">
+              <span className="font-semibold text-foreground">{currentPrivateSession.rateTokensPerMinute}</span>{' '}
+              tkns/min
+            </span>
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              <span className="font-semibold text-foreground tabular-nums">
+                {formatElapsed(elapsedPrivateSeconds)}
+              </span>
+            </span>
+            <span className="text-muted-foreground">
+              Captured: <span className="font-semibold text-green-400">{privateCapturedEstimate}</span>
+            </span>
+            <span className="text-muted-foreground">
+              Reserve: <span className="font-semibold text-foreground">{privateBalanceEstimate}</span>
+            </span>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            loading={endPrivateMutation.isPending}
+            onClick={handleEndPrivate}
+          >
+            End Private
+          </Button>
+        </div>
+      )}
+
+      {pendingRequests.length > 0 && (
+        <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+          <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Private Requests ({pendingRequests.length})
+          </h2>
+          {pendingRequests.map((req: any) => (
+            <div
+              key={req.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5"
+            >
+              <div>
+                <p className="text-sm font-semibold">{userLabel(req.viewer ?? { id: req.viewerId })}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {req.minMinutes} min at {req.rateTokensPerMinute} tkns/min
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <ModerationActionBar
+                  userId={req.viewer?.id ?? req.viewerId}
+                  isMuted={mutedViewerUserIds.has(req.viewer?.id ?? req.viewerId)}
+                  isVip={vipUserIds.has(req.viewer?.id ?? req.viewerId)}
+                  onUserAction={handleUserAction}
+                />
+                <Button size="sm" onClick={() => handleAcceptPrivate(req.id)} loading={acceptMutation.isPending}>
+                  Accept
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </LiveRoomLayout>
   )
 }

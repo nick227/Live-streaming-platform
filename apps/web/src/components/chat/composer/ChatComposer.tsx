@@ -9,12 +9,17 @@ import { EmotePicker } from './EmotePicker'
 
 const MAX_LENGTH = 500
 
+type QuickChatMessage = { label: string; body: string }
+type BuiltInGif = { token: string; label: string }
+
 export function ChatComposer({
   canChat,
   connected,
   sending,
   slowModeSeconds = 0,
   customEmotes = [],
+  quickMessages = [],
+  builtInGifs = [],
   onSend,
 }: {
   canChat: boolean
@@ -22,6 +27,8 @@ export function ChatComposer({
   sending: boolean
   slowModeSeconds?: number
   customEmotes?: string[]
+  quickMessages?: QuickChatMessage[]
+  builtInGifs?: BuiltInGif[]
   onSend: (body: string) => Promise<void>
 }) {
   const [draft, setDraft] = useState('')
@@ -53,8 +60,13 @@ export function ChatComposer({
   }
 
   function insertEmote(emote: string) {
+    insertText(emote)
+  }
+
+  function insertText(text: string) {
     setDraft((current) => {
-      const next = `${current}${emote}`
+      const spacer = current && !current.endsWith(' ') ? ' ' : ''
+      const next = `${current}${spacer}${text}`
       return next.length > MAX_LENGTH ? next.slice(0, MAX_LENGTH) : next
     })
     inputRef.current?.focus()
@@ -62,6 +74,7 @@ export function ChatComposer({
 
   const showCounter = draft.length > 0
   const nearLimit = draft.length > MAX_LENGTH * 0.85
+  const hasBuiltIns = quickMessages.length > 0 || builtInGifs.length > 0
 
   return (
     <form
@@ -99,8 +112,33 @@ export function ChatComposer({
             nearLimit ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
           )}
         >
-          {draft.length}/{MAX_LENGTH}
         </p>
+      )}
+      {hasBuiltIns && (
+        <div className="flex gap-1 flex-wrap pb-0.5">
+          {quickMessages.map((message) => (
+            <button
+              key={`${message.label}-${message.body}`}
+              type="button"
+              disabled={disabled}
+              className="shrink-0 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              onClick={() => insertText(message.body)}
+            >
+              {message.label}
+            </button>
+          ))}
+          {builtInGifs.map((gif) => (
+            <button
+              key={gif.token}
+              type="button"
+              disabled={disabled}
+              className="shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold text-amber-700 transition-colors hover:bg-amber-500/20 disabled:pointer-events-none disabled:opacity-50 dark:text-amber-300"
+              onClick={() => insertText(gif.token)}
+            >
+              {gif.label}
+            </button>
+          ))}
+        </div>
       )}
     </form>
   )

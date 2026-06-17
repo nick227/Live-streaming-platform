@@ -96,6 +96,12 @@ export function useEndRoom() {
         }),
       ),
     onSuccess: () => {
+      // Immediately write isLive: false so the TopBar stops showing "Broadcasting"
+      // without waiting for the background refetch to complete.
+      qc.setQueryData(['creator-profile'], (old: any) => {
+        if (!old?.data) return old
+        return { ...old, data: { ...old.data, isLive: false, currentRoomId: null } }
+      })
       qc.invalidateQueries({ queryKey: ['rooms'] })
       qc.invalidateQueries({ queryKey: ['creator-profile'] })
     },

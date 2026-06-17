@@ -48,7 +48,7 @@ export class UserService {
         isLive: c.isLive,
         privateRateTokensPerMinute: c.privateRateTokensPerMinute,
         minPrivateMinutes: c.minPrivateMinutes,
-        privateViewerCamRequired: c.privateViewerCamRequired,
+        privateViewerCamMode: c.privateViewerCamMode,
         privateScreenShareAllowed: c.privateScreenShareAllowed,
         privateRulesText: c.privateRulesText,
       }

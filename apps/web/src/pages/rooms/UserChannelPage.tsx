@@ -7,9 +7,15 @@ import type { components } from '@streamyolo/sdk'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
-import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Users, AlertTriangle } from 'lucide-react'
 import { ViewerChatPanel, useRoomSocket, type ChatMessageDto } from '@/components/chat'
+import { LiveRoomLayout } from '@/components/rooms/LiveRoomLayout'
+import {
+  LiveRoomHeader,
+  LiveRoomHeaderMedia,
+  liveRoomLinkClassName,
+  liveRoomTitleClassName,
+} from '@/components/rooms/LiveRoomHeader'
 import { RoomViewerVideo } from '@/components/rooms/RoomViewerVideo'
 import { ViewerParticipationPanel } from '@/components/rooms/ViewerParticipationPanel'
 
@@ -30,7 +36,7 @@ function RoomVideoPane({
 }) {
   const isLive = room.status === 'LIVE'
   return (
-    <div className="relative aspect-video bg-muted rounded-lg overflow-hidden flex items-center justify-center">
+    <div className="relative aspect-video overflow-hidden rounded-xl border border-border bg-black">
       <RoomViewerVideo
         roomId={room.id}
         isLive={isLive}
@@ -41,7 +47,9 @@ function RoomVideoPane({
             {room.thumbnailUrl ? (
               <img src={room.thumbnailUrl} alt={room.title} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-4xl text-muted-foreground/20">▶</span>
+              <div className="flex h-full w-full items-center justify-center">
+                <span className="text-4xl text-muted-foreground/20">▶</span>
+              </div>
             )}
           </>
         }
@@ -61,18 +69,18 @@ function RoomVideoPane({
   )
 }
 
-function RoomInfoHeader({ room }: { room: RoomDetail }) {
+function RoomInfoHeader({ room, username }: { room: RoomDetail; username: string }) {
   return (
-    <div className="flex items-start gap-3 py-4 border-b border-border/50">
-      <Avatar src={room.creator?.avatarUrl ?? undefined} name={room.creator?.displayName ?? '?'} size="md" />
-      <div className="flex-1 min-w-0">
-        <h1 className="font-semibold text-lg line-clamp-1">{room.title}</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground">{room.creator?.displayName ?? 'Creator'}</span>
-          <StatusBadge status={room.status} />
-        </div>
-      </div>
-    </div>
+    <LiveRoomHeader
+      media={<LiveRoomHeaderMedia src={room.thumbnailUrl} alt={room.title} />}
+      title={<h1 className={liveRoomTitleClassName}>{room.title}</h1>}
+      link={
+        <a href={`/${username}`} className={liveRoomLinkClassName}>
+          {window.location.origin}/{username}
+        </a>
+      }
+      status="Broadcasting live"
+    />
   )
 }
 
@@ -93,22 +101,8 @@ function OfflineProfileView({ user, creator }: { user: PublicUser; creator?: Cre
       </div>
 
       {creator?.bio && (
-        <div className="bg-card border border-border/50 p-6 rounded-lg text-center">
+        <div className="p-6 text-center">
           <p className="whitespace-pre-wrap">{creator.bio}</p>
-        </div>
-      )}
-
-      {creator?.privateRateTokensPerMinute && creator.privateRateTokensPerMinute > 0 && (
-        <div className="bg-muted/50 p-6 rounded-lg border border-border/50">
-          <h3 className="font-semibold mb-2">Private Sessions</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Available for {creator.privateRateTokensPerMinute} tokens/min (min {creator.minPrivateMinutes} mins).
-          </p>
-          {creator.privateRulesText && (
-            <div className="text-sm border-t border-border pt-4">
-              <span className="font-medium text-foreground">Rules:</span> {creator.privateRulesText}
-            </div>
-          )}
         </div>
       )}
 
@@ -205,7 +199,6 @@ export function UserChannelPage() {
     sending, 
     sendMessage,
     privateRequestStatus,
-    setPrivateRequestStatus
   } = useRoomSocket(
     room?.id,
     initialMessages,
@@ -241,39 +234,39 @@ export function UserChannelPage() {
 
   const menuItems = menuData?.data?.items ?? []
   const displayViewerCount = viewerCount ?? room.viewerCount
+  const renderChat = () => (
+    <ViewerChatPanel
+      messages={messages}
+      pinnedMessage={pinnedMessage}
+      slowModeSeconds={slowModeSeconds}
+      vipUserIds={vipUserIds}
+      canChat={viewerState?.canChat ?? true}
+      connected={connected}
+      sending={sending}
+      onSend={sendMessage}
+    />
+  )
 
   return (
-    <div className="space-y-4 max-w-[1600px] mx-auto p-4">
-      <RoomVideoPane
-        room={room}
-        viewerCount={displayViewerCount}
-        isReconnecting={isReconnecting}
-        activePrivateSessionId={activePrivateSessionId}
-      />
-      <RoomInfoHeader room={room} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[500px]">
-        <div className="lg:col-span-2 min-h-0">
-          <ViewerChatPanel
-            messages={messages}
-            pinnedMessage={pinnedMessage}
-            slowModeSeconds={slowModeSeconds}
-            vipUserIds={vipUserIds}
-            canChat={viewerState?.canChat ?? true}
-            connected={connected}
-            sending={sending}
-            onSend={sendMessage}
-          />
-        </div>
-        <div className="min-h-0 overflow-y-auto">
-          <ViewerParticipationPanel 
-            room={room} 
-            viewerState={viewerState} 
-            menuItems={menuItems}
-            privateRequestStatus={privateRequestStatus}
-            setPrivateRequestStatus={setPrivateRequestStatus}
-          />
-        </div>
-      </div>
-    </div>
+    <LiveRoomLayout
+      header={<RoomInfoHeader room={room} username={username!} />}
+      video={
+        <RoomVideoPane
+          room={room}
+          viewerCount={displayViewerCount}
+          isReconnecting={isReconnecting}
+          activePrivateSessionId={activePrivateSessionId}
+        />
+      }
+      controls={
+        <ViewerParticipationPanel
+          room={room}
+          viewerState={viewerState}
+          menuItems={menuItems}
+          privateRequestStatus={privateRequestStatus}
+        />
+      }
+      chat={renderChat}
+    />
   )
 }

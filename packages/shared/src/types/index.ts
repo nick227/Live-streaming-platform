@@ -144,6 +144,8 @@ export interface TipDto {
   createdAt: string
 }
 
+export type ViewerCamMode = 'OFF' | 'OPTIONAL' | 'REQUIRED'
+
 export interface PrivateSessionDto {
   id: string
   creatorId: string
@@ -152,7 +154,7 @@ export interface PrivateSessionDto {
   status: PrivateSessionStatus
   rateTokensPerMinute: number
   minMinutes: number
-  viewerCamRequired: boolean
+  viewerCamMode: ViewerCamMode
   screenShareAllowed: boolean
   rulesText?: string
   reservedTokens: number

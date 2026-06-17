@@ -27,7 +27,19 @@ const server = Fastify({ logger: true })
 const specPath = resolve(__dirname, '../../../packages/api-spec/openapi.yaml')
 const spec = load(readFileSync(specPath, 'utf-8')) as object
 
+async function resetStaleLiveRooms() {
+  const staleCount = await db.room.count({ where: { status: 'LIVE' } })
+  if (staleCount > 0) {
+    console.log(`[startup] Resetting ${staleCount} stale LIVE room(s) from previous process`)
+    await db.room.updateMany({ where: { status: 'LIVE' }, data: { status: 'ENDED', endedAt: new Date() } })
+    await db.creatorProfile.updateMany({ where: { isLive: true }, data: { isLive: false, currentRoomId: null } })
+  }
+  await PrivateSessionService.cleanupStaleSessionsOnStartup()
+}
+
 async function main() {
+  await resetStaleLiveRooms()
+
   await server.register(cors, {
     origin: process.env.NODE_ENV === 'production' ? process.env.CORS_ORIGIN : true,
     credentials: true,
@@ -82,6 +94,11 @@ async function main() {
     PrivateSessionService.expireStaleRequested().catch(console.error)
     PrivateSessionService.expireStaleActive().catch(console.error)
   }, 60 * 1000)
+
+  // 10s precision loop for creator disconnects
+  setInterval(() => {
+    PrivateSessionService.checkCreatorDisconnects().catch(console.error)
+  }, 10 * 1000)
 
   const port = Number(process.env.PORT ?? 3001)
   server.listen({ port, host: '0.0.0.0' }, (err) => {

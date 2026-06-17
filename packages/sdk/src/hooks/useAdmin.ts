@@ -41,7 +41,11 @@ export function useAdminEndRoom() {
           body: body as any,
         }),
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'rooms'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'rooms'] })
+      qc.invalidateQueries({ queryKey: ['rooms'] })
+      qc.invalidateQueries({ queryKey: ['creator-profile'] })
+    },
   })
 }
 
@@ -348,6 +352,51 @@ export function useAdminReports(params?: { cursor?: string; limit?: number; stat
     queryKey: ['admin', 'reports', params],
     queryFn: async () =>
       unwrap(await getApiClient().GET('/admin/reports', { params: { query: params as any } })),
+  })
+}
+
+// ── Categories ────────────────────────────────────────────────────────────────
+
+export function useAdminCategories() {
+  return useQuery({
+    queryKey: ['admin', 'categories'],
+    queryFn: async () => unwrap(await getApiClient().GET('/admin/categories')),
+  })
+}
+
+export function useAdminCreateCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: { slug: string; label: string; sortOrder?: number }) =>
+      unwrap(await getApiClient().POST('/admin/categories', { body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'categories'] }),
+  })
+}
+
+export function useAdminUpdateCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ categoryId, ...body }: { categoryId: string; label?: string; sortOrder?: number; isActive?: boolean }) =>
+      unwrap(
+        await getApiClient().PATCH('/admin/categories/{categoryId}', {
+          params: { path: { categoryId } },
+          body: body as any,
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'categories'] }),
+  })
+}
+
+export function useAdminDeleteCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (categoryId: string) =>
+      unwrap(
+        await getApiClient().DELETE('/admin/categories/{categoryId}', {
+          params: { path: { categoryId } },
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'categories'] }),
   })
 }
 

@@ -150,7 +150,7 @@ export function ActivePrivateSessionPage() {
   return (
     <div className="w-full h-[calc(100vh-4rem)] flex flex-col relative bg-black">
       <LiveKitRoom
-        video={!isViewer || session.viewerCamRequired}
+        video={!isViewer || session.viewerCamMode !== 'OFF'}
         audio={true}
         token={token}
         serverUrl={url}

@@ -225,8 +225,9 @@ components:
         minPrivateMinutes:
           type: integer
           nullable: true
-        privateViewerCamRequired:
-          type: boolean
+        privateViewerCamMode:
+          type: string
+          enum: [OFF, OPTIONAL, REQUIRED]
           nullable: true
         privateScreenShareAllowed:
           type: boolean
@@ -249,7 +250,7 @@ components:
 
     CreatorProfileDetail:
       type: object
-      required: [id, userId, displayName, status, isLive, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, createdAt]
+      required: [id, userId, displayName, status, isLive, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamMode, privateScreenShareAllowed, createdAt]
       properties:
         id: { type: string }
         userId: { type: string }
@@ -278,7 +279,7 @@ components:
           nullable: true
         defaultRoomCategory:
           type: string
-          enum: [MALE, FEMALE, COUPLES, TRANS, null]
+          enum: [BUSINESS, MUSIC, COMEDY, EDUCATION, null]
           nullable: true
         defaultCountryCode:
           type: string
@@ -288,7 +289,7 @@ components:
           items: { $ref: '#/components/schemas/RoomTagDto' }
         privateRateTokensPerMinute: { type: integer, minimum: 0 }
         minPrivateMinutes: { type: integer, minimum: 1 }
-        privateViewerCamRequired: { type: boolean }
+        privateViewerCamMode: { type: string, enum: [OFF, OPTIONAL, REQUIRED] }
         privateScreenShareAllowed: { type: boolean }
         privateRulesText:
           type: string
@@ -331,7 +332,7 @@ components:
         logoMediaId: { type: string }
         privateRateTokensPerMinute: { type: integer, minimum: 0 }
         minPrivateMinutes: { type: integer, minimum: 1 }
-        privateViewerCamRequired: { type: boolean }
+        privateViewerCamMode: { type: string, enum: [OFF, OPTIONAL, REQUIRED] }
         privateScreenShareAllowed: { type: boolean }
         privateRulesText: { type: string, maxLength: 2000 }
 
@@ -339,7 +340,6 @@ components:
 
     RoomCategory:
       type: string
-      enum: [MALE, FEMALE, COUPLES, TRANS]
 
     RoomTagDto:
       type: object
@@ -386,6 +386,17 @@ components:
         sortOrder: { type: integer }
         isActive: { type: boolean }
 
+    AdminCategoryDto:
+      type: object
+      required: [id, slug, label, sortOrder, isActive, createdAt]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        label: { type: string }
+        sortOrder: { type: integer }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
     RoomTaxonomy:
       type: object
       required: [categories, tags, countries, popularCountryCodes]
@@ -416,7 +427,7 @@ components:
 
     RoomCard:
       type: object
-      required: [id, title, status, visibility, creator, viewerCount, activePrivateSessionId, privateAvailable, tags, createdAt]
+      required: [id, title, status, visibility, mediaMode, creator, viewerCount, activePrivateSessionId, privateAvailable, tags, createdAt]
       properties:
         id: { type: string }
         title: { type: string }
@@ -426,15 +437,19 @@ components:
         visibility:
           type: string
           enum: [PUBLIC, UNLISTED]
+        mediaMode:
+          type: string
+          enum: [VIDEO, AUDIO_ONLY]
         category:
           type: string
           nullable: true
-          description: MALE, FEMALE, COUPLES, or TRANS when set
+          description: BUSINESS, MUSIC, COMEDY, or EDUCATION when set
         countryCode:
           type: string
           minLength: 2
           maxLength: 2
           nullable: true
+          description: Locked while live.
         countryName:
           type: string
           nullable: true
@@ -449,6 +464,7 @@ components:
         activePrivateSessionId:
           type: string
           nullable: true
+          description: Derived from current private sessions.
         privateAvailable: { type: boolean }
         privateRateTokensPerMinute:
           type: integer
@@ -461,7 +477,7 @@ components:
 
     RoomDetail:
       type: object
-      required: [id, title, status, visibility, creator, viewerCount, activePrivateSessionId, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamRequired, privateScreenShareAllowed, tags, createdAt]
+      required: [id, title, status, visibility, mediaMode, creator, viewerCount, activePrivateSessionId, privateRateTokensPerMinute, minPrivateMinutes, privateViewerCamMode, privateScreenShareAllowed, tags, createdAt]
       properties:
         id: { type: string }
         title: { type: string }
@@ -471,10 +487,13 @@ components:
         visibility:
           type: string
           enum: [PUBLIC, UNLISTED]
+        mediaMode:
+          type: string
+          enum: [VIDEO, AUDIO_ONLY]
         category:
           type: string
           nullable: true
-          description: MALE, FEMALE, COUPLES, or TRANS when set
+          description: BUSINESS, MUSIC, COMEDY, or EDUCATION when set. Locked while live.
         countryCode:
           type: string
           minLength: 2
@@ -499,7 +518,7 @@ components:
           nullable: true
         privateRateTokensPerMinute: { type: integer }
         minPrivateMinutes: { type: integer }
-        privateViewerCamRequired: { type: boolean }
+        privateViewerCamMode: { type: string, enum: [OFF, OPTIONAL, REQUIRED] }
         privateScreenShareAllowed: { type: boolean }
         privateRulesText:
           type: string
@@ -527,6 +546,9 @@ components:
         visibility:
           type: string
           enum: [PUBLIC, UNLISTED]
+        mediaMode:
+          type: string
+          enum: [VIDEO, AUDIO_ONLY]
         thumbnailMediaId: { type: string }
         coverMediaId: { type: string }
         category: { $ref: '#/components/schemas/RoomCategory' }
@@ -868,7 +890,7 @@ components:
 
     PrivateSessionDto:
       type: object
-      required: [id, creatorId, viewerId, publicRoomId, status, rateTokensPerMinute, minMinutes, viewerCamRequired, screenShareAllowed, reservedTokens, capturedTokens, releasedTokens, requestedAt, createdAt]
+      required: [id, creatorId, viewerId, publicRoomId, status, rateTokensPerMinute, minMinutes, viewerCamMode, screenShareAllowed, reservedTokens, capturedTokens, releasedTokens, requestedAt, createdAt]
       properties:
         id: { type: string }
         creatorId: { type: string }
@@ -879,8 +901,10 @@ components:
           enum: [REQUESTED, ACCEPTED, DECLINED, ACTIVE, ENDED, CANCELLED, EXPIRED, FORCE_ENDED]
         rateTokensPerMinute: { type: integer }
         minMinutes: { type: integer }
-        viewerCamRequired: { type: boolean }
-        screenShareAllowed: { type: boolean }
+        viewerCamMode: { type: string, enum: [OFF, OPTIONAL, REQUIRED] }
+        screenShareAllowed:
+          type: boolean
+          description: Creator only screen sharing.
         rulesText:
           type: string
           nullable: true
@@ -907,6 +931,10 @@ components:
           type: string
           format: date-time
           nullable: true
+        creatorReconnectGraceSeconds:
+          type: integer
+          nullable: true
+          description: Grace period in seconds before session is force-ended after creator disconnects.
         endedReason:
           type: string
           nullable: true
@@ -3822,6 +3850,115 @@ paths:
       responses:
         '200':
           description: Token pack deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [ok]
+                    properties:
+                      ok: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ── Admin Categories ─────────────────────────────────────────────────────────
+
+  /admin/categories:
+    get:
+      operationId: listAdminCategories
+      summary: Admin list all categories
+      tags: [admin]
+      responses:
+        '200':
+          description: Categories list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminCategoryDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createAdminCategory
+      summary: Admin create a category
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug, label]
+              properties:
+                slug: { type: string }
+                label: { type: string }
+                sortOrder: { type: integer }
+      responses:
+        '200':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/AdminCategoryDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/categories/{categoryId}:
+    patch:
+      operationId: updateAdminCategory
+      summary: Admin update a category
+      tags: [admin]
+      parameters:
+        - in: path
+          name: categoryId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string }
+                sortOrder: { type: integer }
+                isActive: { type: boolean }
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/AdminCategoryDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteAdminCategory
+      summary: Admin delete a category
+      tags: [admin]
+      parameters:
+        - in: path
+          name: categoryId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Category deleted
           content:
             application/json:
               schema:

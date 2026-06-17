@@ -5,3 +5,8 @@ export type ModerationHandlers = {
   onDeleteMessage?: (messageId: string) => void
   onPinMessage?: (messageId: string) => void
 }
+
+export type ModerationUserState = {
+  isMuted?: boolean
+  isVip?: boolean
+}

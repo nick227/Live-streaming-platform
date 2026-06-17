@@ -4,21 +4,37 @@ import { cn } from '@/lib/utils'
 import { formatMessageTime } from '../model/formatMessageTime'
 import { getChatFilter } from '../model/chatFilter'
 import type { ChatItem } from '../model/types'
+import { BUILT_IN_GIF_BY_TOKEN } from '../composer/builtIns'
 import { ChatUsername } from './ChatUsername'
-import { EVENT_TYPE_STYLES } from './eventTypeStyles'
-
-function studioBadgeLabel(type: ChatItem['type']) {
-  if (type === 'tip') return 'tips'
-  if (type === 'moderation') return 'mod'
-  if (type === 'system') return 'notice'
-  return 'chat'
-}
 
 function viewerRowClassName(type: ChatItem['type']) {
   if (type === 'tip') return 'border-l-2 border-l-amber-500 bg-amber-500/10 border-amber-500/20'
   if (type === 'moderation') return 'bg-destructive/10 border-destructive/30'
   if (type === 'system') return 'bg-muted/40 border-border/50'
   return 'hover:bg-muted/30 border-transparent'
+}
+
+function renderMessageBody(body: string) {
+  const parts = body.split(/(\[gif:[a-z-]+\])/g).filter(Boolean)
+  return parts.map((part, index) => {
+    const gif = BUILT_IN_GIF_BY_TOKEN.get(part)
+    if (!gif) return <span key={`${part}-${index}`}>{part}</span>
+
+    return (
+      <span
+        key={gif.token}
+        className={cn(
+          'mx-1 inline-flex min-w-20 items-center justify-center rounded-md border border-amber-500/30',
+          'bg-gradient-to-r from-amber-500/20 via-primary/15 to-amber-500/20 px-2 py-1',
+          'text-[10px] font-black uppercase tracking-widest text-amber-700 shadow-sm',
+          'animate-pulse dark:text-amber-300',
+        )}
+        title={gif.label}
+      >
+        {gif.title}
+      </span>
+    )
+  })
 }
 
 export function ChatMessageRow({
@@ -41,8 +57,6 @@ export function ChatMessageRow({
 
   if (variant === 'studio') {
     const typeKey = getChatFilter(event).toLowerCase()
-    const badgeLabel = studioBadgeLabel(event.type)
-    const typeStyle = EVENT_TYPE_STYLES[typeKey] ?? EVENT_TYPE_STYLES.chat
 
     return (
       <div
@@ -53,12 +67,9 @@ export function ChatMessageRow({
           removed && 'opacity-40',
         )}
       >
-        <span className={cn('mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide', typeStyle)}>
-          {badgeLabel}
-        </span>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-1.5 flex-wrap">
+          <div className="flex items-baseline gap-1.5 flex-wrap justify-between">
             <ChatUsername
               user={event.message.user}
               messageType={event.message.type}
@@ -69,12 +80,12 @@ export function ChatMessageRow({
               {formatMessageTime(event.message.createdAt)}
             </span>
           </div>
-          <p className="text-sm break-words leading-snug mt-0.5">
+          <p className="text-lg break-words leading-snug mt-0.5">
             {removed ? (
               <span className="italic text-muted-foreground">Message removed</span>
             ) : (
               <>
-                {event.message.body}
+                {renderMessageBody(event.message.body)}
                 {isTip && (
                   <span className="ml-1.5 inline-flex items-center gap-0.5 font-bold text-amber-600 dark:text-amber-400">
                     <Coins className="h-3.5 w-3.5" />
@@ -86,11 +97,6 @@ export function ChatMessageRow({
           </p>
         </div>
 
-        {!removed && moderationSlot && (
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
-            {moderationSlot}
-          </div>
-        )}
       </div>
     )
   }
@@ -118,7 +124,7 @@ export function ChatMessageRow({
           <span className="text-muted-foreground">:</span>
         </span>
         <span className={cn('break-words min-w-0', event.type === 'system' && 'text-muted-foreground italic')}>
-          {removed ? 'Message removed' : event.message.body}
+          {removed ? 'Message removed' : renderMessageBody(event.message.body)}
           {isTip && !removed && (
             <span className="ml-2 inline-flex items-center gap-0.5 font-bold text-amber-600 dark:text-amber-400">
               <Coins className="h-3.5 w-3.5" />

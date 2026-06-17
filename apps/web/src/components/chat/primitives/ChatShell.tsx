@@ -4,7 +4,6 @@ import { ChatConnectionStatus } from './ChatConnectionStatus'
 
 export function ChatShell({
   className,
-  title = 'Chat',
   connected,
   headerSlot,
   bannerSlot,
@@ -28,7 +27,6 @@ export function ChatShell({
     >
       {headerSlot ?? (
         <div className="flex items-center justify-between shrink-0 px-1">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{title}</h2>
           {connected !== undefined && <ChatConnectionStatus connected={connected} />}
         </div>
       )}

@@ -170,7 +170,7 @@ export async function createTestCreator(userId: string = testUserId) {
       privateRulesText: 'No recording allowed.',
       privateRateTokensPerMinute: 10,
       minPrivateMinutes: 5,
-      privateViewerCamRequired: false,
+      privateViewerCamMode: 'OPTIONAL',
       privateScreenShareAllowed: true,
       status: 'ACTIVE',
     },
@@ -196,7 +196,7 @@ export async function createRoom(creatorOrUserId: string) {
       creatorId: creator.id,
       title: 'Test Room',
       livekitRoomName: `lk-${Math.random()}`,
-      category: 'FEMALE',
+      category: 'MUSIC',
       countryCode: 'US',
     },
   })
@@ -221,7 +221,7 @@ export async function createLiveRoom(creatorOrUserId: string) {
       livekitRoomName: `lk-live-${Math.random()}`,
       status: 'LIVE',
       thumbnailMediaId: media.id,
-      category: 'FEMALE',
+      category: 'MUSIC',
       countryCode: 'US',
     }
   })

@@ -73,7 +73,7 @@ function formatCreatorProfileDetail(c: any) {
     })),
     privateRateTokensPerMinute: c.privateRateTokensPerMinute || 0,
     minPrivateMinutes: c.minPrivateMinutes || 1,
-    privateViewerCamRequired: c.privateViewerCamRequired ?? false,
+    privateViewerCamMode: c.privateViewerCamMode ?? 'OPTIONAL',
     privateScreenShareAllowed: c.privateScreenShareAllowed ?? false,
     privateRulesText: c.privateRulesText ?? null,
     payoutStatus: c.payoutStatus ?? 'DISABLED',
@@ -120,7 +120,7 @@ export function formatPrivateSessionDto(s: any) {
     status: s.status,
     rateTokensPerMinute: s.rateTokensPerMinute,
     minMinutes: s.minMinutes || 1,
-    viewerCamRequired: s.viewerCamRequired ?? false,
+    viewerCamMode: s.viewerCamMode ?? 'OPTIONAL',
     screenShareAllowed: s.screenShareAllowed ?? false,
     rulesText: s.rulesText ?? null,
     reservedTokens: s.reservedTokens || 0,
@@ -335,6 +335,39 @@ export async function adminHideMedia(request: any, reply: any) {
 export async function getAdminCreator(request: any, reply: any) {
   const creator = await adminService.getCreator(request.params.creatorId)
   return reply.send({ data: formatCreatorProfileDetail({ ...creator, user: creator.user }) })
+}
+
+// ── Categories ────────────────────────────────────────────────────────────────
+
+function formatCategory(cat: any) {
+  return {
+    id: cat.id,
+    slug: cat.slug,
+    label: cat.label,
+    sortOrder: cat.sortOrder,
+    isActive: cat.isActive,
+    createdAt: cat.createdAt.toISOString(),
+  }
+}
+
+export async function listAdminCategories(_request: any, reply: any) {
+  const categories = await adminService.listCategories()
+  return reply.send({ data: categories.map(formatCategory) })
+}
+
+export async function createAdminCategory(request: any, reply: any) {
+  const category = await adminService.createCategory(request.body)
+  return reply.send({ data: formatCategory(category) })
+}
+
+export async function updateAdminCategory(request: any, reply: any) {
+  const category = await adminService.updateCategory(request.params.categoryId, request.body)
+  return reply.send({ data: formatCategory(category) })
+}
+
+export async function deleteAdminCategory(request: any, reply: any) {
+  const result = await adminService.deleteCategory(request.params.categoryId)
+  return reply.send({ data: result })
 }
 
 // ── Tags ──────────────────────────────────────────────────────────────────────

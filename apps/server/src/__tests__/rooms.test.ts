@@ -52,19 +52,19 @@ describe('listRooms', () => {
         status: 'LIVE',
         visibility: 'PUBLIC',
         thumbnailMediaId: media.id,
-        category: 'FEMALE',
+        category: 'MUSIC',
         countryCode: 'US',
       },
     })
 
     const res = await app.inject({
       method: 'GET',
-      url: '/rooms?category=FEMALE&country=US',
+      url: '/rooms?category=MUSIC&country=US',
     })
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.data.length).toBeGreaterThan(0)
-    expect(body.data.every((room: { category: string }) => room.category === 'FEMALE')).toBe(true)
+    expect(body.data.every((room: { category: string }) => room.category === 'MUSIC')).toBe(true)
   })
 
   it('filters by tag', async () => {
@@ -87,7 +87,7 @@ describe('listRooms', () => {
         status: 'LIVE',
         visibility: 'PUBLIC',
         thumbnailMediaId: media.id,
-        category: 'COUPLES',
+        category: 'COMEDY',
         countryCode: 'GB',
         tags: { create: [{ tagId: tag.id }] },
       },

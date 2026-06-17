@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getApiClient, unwrap } from '../client'
+import type { components } from '../generated/types'
+
+type RequestPrivateSessionBody = components['schemas']['RequestPrivateSessionInput']
 
 export function useRequestPrivateSession() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ roomId, ...body }: { roomId: string; message?: string }) =>
+    mutationFn: async ({ roomId, ...body }: { roomId: string } & RequestPrivateSessionBody) =>
       unwrap(
         await getApiClient().POST('/rooms/{roomId}/private-sessions/request', {
           params: { path: { roomId } },
-          body: body as any,
+          body,
         }),
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['wallet'] }),

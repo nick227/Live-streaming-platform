@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Users } from 'lucide-react'
 import { ViewerChatPanel, useRoomSocket, type ChatMessageDto } from '@/components/chat'
+import { LiveRoomLayout } from '@/components/rooms/LiveRoomLayout'
 import { RoomViewerVideo } from '@/components/rooms/RoomViewerVideo'
 import { ViewerParticipationPanel } from '@/components/rooms/ViewerParticipationPanel'
 
@@ -28,7 +29,7 @@ function RoomVideoPane({
   const isLive = room.status === 'LIVE'
 
   return (
-    <div className="relative aspect-video bg-muted rounded-lg overflow-hidden flex items-center justify-center">
+    <div className="relative aspect-video overflow-hidden rounded-xl border border-border bg-muted flex items-center justify-center">
       <RoomViewerVideo
         roomId={room.id}
         isLive={isLive}
@@ -61,7 +62,7 @@ function RoomVideoPane({
 
 function RoomInfoHeader({ room }: { room: RoomDetail }) {
   return (
-    <div className="flex items-start gap-3 py-4 border-b border-border/50">
+    <div className="flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3">
       <div className="flex-1 min-w-0">
         <h1 className="font-semibold text-lg line-clamp-1">{room.title}</h1>
         <div className="flex items-center gap-2 flex-wrap">
@@ -131,7 +132,6 @@ export function RoomPage() {
     sending,
     sendMessage,
     privateRequestStatus,
-    setPrivateRequestStatus,
   } = useRoomSocket(room?.id, initialMessages, socketCallbacks, { initialVipUserIds })
 
   if (isLoading) {
@@ -165,38 +165,39 @@ export function RoomPage() {
     hasActivePrivateSession: false,
   }
 
+  const renderChat = () => (
+    <ViewerChatPanel
+      messages={messages}
+      pinnedMessage={pinnedMessage}
+      slowModeSeconds={slowModeSeconds}
+      vipUserIds={vipUserIds}
+      canChat={viewerState.canChat}
+      connected={connected}
+      sending={sending}
+      onSend={sendMessage}
+    />
+  )
+
   return (
-    <div className="space-y-4 max-w-[1600px] mx-auto p-4">
-      <RoomVideoPane
-        room={room}
-        viewerCount={displayViewerCount}
-        isReconnecting={isReconnecting}
-        activePrivateSessionId={activePrivateSessionId}
-      />
-      <RoomInfoHeader room={room} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[500px]">
-        <div className="lg:col-span-2 min-h-0">
-          <ViewerChatPanel
-            messages={messages}
-            pinnedMessage={pinnedMessage}
-            slowModeSeconds={slowModeSeconds}
-            vipUserIds={vipUserIds}
-            canChat={viewerState.canChat}
-            connected={connected}
-            sending={sending}
-            onSend={sendMessage}
-          />
-        </div>
-        <div className="min-h-0 overflow-y-auto">
-          <ViewerParticipationPanel
-            room={room}
-            viewerState={viewerState}
-            menuItems={menuItems}
-            privateRequestStatus={privateRequestStatus}
-            setPrivateRequestStatus={setPrivateRequestStatus}
-          />
-        </div>
-      </div>
-    </div>
+    <LiveRoomLayout
+      header={<RoomInfoHeader room={room} />}
+      video={
+        <RoomVideoPane
+          room={room}
+          viewerCount={displayViewerCount}
+          isReconnecting={isReconnecting}
+          activePrivateSessionId={activePrivateSessionId}
+        />
+      }
+      controls={
+        <ViewerParticipationPanel
+          room={room}
+          viewerState={viewerState}
+          menuItems={menuItems}
+          privateRequestStatus={privateRequestStatus}
+        />
+      }
+      chat={renderChat}
+    />
   )
 }

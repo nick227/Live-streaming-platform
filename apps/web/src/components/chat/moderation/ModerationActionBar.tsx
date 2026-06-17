@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/Button'
-import type { ModerationHandlers } from './types'
+import type { ModerationHandlers, ModerationUserState } from './types'
 
 function confirmAction(label: string, action: () => void) {
   if (window.confirm(`Confirm: ${label}?`)) action()
@@ -8,34 +8,42 @@ function confirmAction(label: string, action: () => void) {
 export function ModerationActionBar({
   userId,
   messageId,
+  isMuted = false,
+  isVip = false,
   onUserAction,
   onDeleteMessage,
   onPinMessage,
 }: {
   userId?: string
   messageId?: string
-} & ModerationHandlers) {
+} & ModerationUserState & ModerationHandlers) {
   return (
     <div className="flex flex-wrap gap-1">
       {userId && (
         <>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onUserAction('mute', userId)}>
-            Mute
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onUserAction('unmute', userId)}>
-            Unmute
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs"
+            onClick={() => onUserAction(isMuted ? 'unmute' : 'mute', userId)}
+          >
+            {isMuted ? 'Unmute' : 'Mute'}
           </Button>
           <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => confirmAction('kick this viewer', () => onUserAction('kick', userId))}>
             Kick
           </Button>
-          <Button type="button" size="sm" variant="destructive" className="h-7 px-2 text-xs" onClick={() => confirmAction('ban this viewer', () => onUserAction('ban', userId))}>
+          <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => confirmAction('ban this viewer', () => onUserAction('ban', userId))}>
             Ban
           </Button>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onUserAction('vip', userId)}>
-            VIP
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onUserAction('unvip', userId)}>
-            UnVIP
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs"
+            onClick={() => onUserAction(isVip ? 'unvip' : 'vip', userId)}
+          >
+            {isVip ? 'UnVIP' : 'VIP'}
           </Button>
         </>
       )}

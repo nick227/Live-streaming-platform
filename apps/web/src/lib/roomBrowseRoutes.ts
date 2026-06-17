@@ -1,11 +1,5 @@
-import {
-  categoryEnumToSlug,
-  categorySlugToEnum,
-  type RoomCategory,
-} from '@streamyolo/shared/room-taxonomy'
-
 export type BrowseFilters = {
-  categories: RoomCategory[]
+  categories: string[]
   countries: string[]
   tags: string[]
   q?: string
@@ -28,8 +22,6 @@ export function parseBrowsePath(pathname: string, search = ''): BrowseFilters {
 
     if (key === 'c') {
       filters.categories = splitSegment(rawValue)
-        .map((slug) => categorySlugToEnum(slug))
-        .filter((value): value is RoomCategory => value !== null)
       index += 2
       continue
     }
@@ -60,7 +52,7 @@ export function buildBrowsePath(filters: BrowseFilters): string {
   const segments = ['/rooms']
 
   if (filters.categories.length > 0) {
-    segments.push('c', filters.categories.map((value) => categoryEnumToSlug(value)).join('+'))
+    segments.push('c', filters.categories.join('+'))
   }
   if (filters.countries.length > 0) {
     segments.push('country', filters.countries.map((code) => code.toLowerCase()).join('+'))
@@ -85,10 +77,10 @@ export function browseFiltersToQuery(filters: BrowseFilters) {
   }
 }
 
-/** Legacy query URLs → friendly path (e.g. ?category=FEMALE → /rooms/c/female) */
+/** Legacy query URLs → friendly path (e.g. ?category=female → /rooms/c/female) */
 export function legacyBrowseSearchToPath(search: string): string | null {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
-  const categories = params.getAll('category').filter(Boolean) as RoomCategory[]
+  const categories = params.getAll('category').map((v) => v.toLowerCase()).filter(Boolean)
   const countries = params.getAll('country').map((code) => code.toUpperCase()).filter(Boolean)
   const tags = params.getAll('tag').filter(Boolean)
   const q = params.get('q')?.trim()

@@ -25,7 +25,7 @@ export function ProfileWalletCard() {
             <span className="text-3xl font-bold">{balance.toLocaleString()}</span>
           </div>
         </div>
-        <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20 shrink-0">
+        <Button asChild variant="outline" size="sm" className="bg-white/10 border-white/20 h-14 text-white hover:text-black hover:bg-white shrink-0">
           <Link to="/token-packs" state={{ from: returnRoute }}>
             <ShoppingCart className="h-4 w-4 mr-1.5" />
             Buy Tokens

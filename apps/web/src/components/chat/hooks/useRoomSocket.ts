@@ -130,6 +130,10 @@ export function useRoomSocket(
     )
   }, [])
 
+  const markUserRewarded = useCallback((reward: { type: string; userId: string }) => {
+    setVipUserIds((prev) => applyVipReward(prev, reward))
+  }, [])
+
   return {
     messages,
     viewerCount,
@@ -142,5 +146,6 @@ export function useRoomSocket(
     setPrivateRequestStatus,
     sendMessage,
     markMessageDeleted,
+    markUserRewarded,
   }
 }

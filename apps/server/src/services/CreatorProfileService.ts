@@ -39,7 +39,7 @@ export class CreatorProfileService {
       logoMediaId?: string
       privateRateTokensPerMinute?: number
       minPrivateMinutes?: number
-      privateViewerCamRequired?: boolean
+      privateViewerCamMode?: 'OFF' | 'OPTIONAL' | 'REQUIRED'
       privateScreenShareAllowed?: boolean
       privateRulesText?: string
     },
@@ -58,8 +58,8 @@ export class CreatorProfileService {
           ? { privateRateTokensPerMinute: data.privateRateTokensPerMinute }
           : {}),
         ...(data.minPrivateMinutes !== undefined ? { minPrivateMinutes: data.minPrivateMinutes } : {}),
-        ...(data.privateViewerCamRequired !== undefined
-          ? { privateViewerCamRequired: data.privateViewerCamRequired }
+        ...(data.privateViewerCamMode !== undefined
+          ? { privateViewerCamMode: data.privateViewerCamMode }
           : {}),
         ...(data.privateScreenShareAllowed !== undefined
           ? { privateScreenShareAllowed: data.privateScreenShareAllowed }
@@ -92,7 +92,7 @@ export function formatCreatorProfile(profile: any) {
     currentRoomId: profile.currentRoomId ?? null,
     privateRateTokensPerMinute: profile.privateRateTokensPerMinute,
     minPrivateMinutes: profile.minPrivateMinutes,
-    privateViewerCamRequired: profile.privateViewerCamRequired,
+    privateViewerCamMode: profile.privateViewerCamMode,
     privateScreenShareAllowed: profile.privateScreenShareAllowed,
     privateRulesText: profile.privateRulesText ?? null,
     createdAt: profile.createdAt.toISOString(),

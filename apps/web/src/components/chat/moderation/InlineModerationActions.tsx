@@ -1,5 +1,5 @@
 import { Pin } from 'lucide-react'
-import type { ModerationHandlers } from './types'
+import type { ModerationHandlers, ModerationUserState } from './types'
 
 function confirmAction(label: string, action: () => void) {
   if (window.confirm(`Confirm: ${label}?`)) action()
@@ -8,23 +8,25 @@ function confirmAction(label: string, action: () => void) {
 export function InlineModerationActions({
   userId,
   messageId,
+  isMuted = false,
+  isVip = false,
   onUserAction,
   onDeleteMessage,
   onPinMessage,
 }: {
   userId?: string
   messageId?: string
-} & ModerationHandlers) {
+} & ModerationUserState & ModerationHandlers) {
   return (
     <div className="flex items-center gap-1 shrink-0">
       {userId && (
         <>
           <button
             className="h-6 px-1.5 rounded text-[10px] font-medium bg-muted hover:bg-muted/70 text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => onUserAction('mute', userId)}
-            title="Mute"
+            onClick={() => onUserAction(isMuted ? 'unmute' : 'mute', userId)}
+            title={isMuted ? 'Unmute' : 'Mute'}
           >
-            Mute
+            {isMuted ? 'Unmute' : 'Mute'}
           </button>
           <button
             className="h-6 px-1.5 rounded text-[10px] font-medium bg-muted hover:bg-red-600 hover:text-white text-muted-foreground transition-colors"
@@ -42,10 +44,10 @@ export function InlineModerationActions({
           </button>
           <button
             className="h-6 px-1.5 rounded text-[10px] font-medium bg-muted hover:bg-primary hover:text-primary-foreground text-muted-foreground transition-colors"
-            onClick={() => onUserAction('vip', userId)}
-            title="VIP"
+            onClick={() => onUserAction(isVip ? 'unvip' : 'vip', userId)}
+            title={isVip ? 'Remove VIP' : 'VIP'}
           >
-            VIP
+            {isVip ? 'UnVIP' : 'VIP'}
           </button>
         </>
       )}

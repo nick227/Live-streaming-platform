@@ -85,7 +85,7 @@ describe('Smoke Test - Room connection and lifecycle', () => {
       payload: {
         title: 'Smoke Test Room',
         thumbnailMediaId: media.id,
-        category: 'FEMALE',
+        category: 'MUSIC',
         countryCode: 'US',
       }
     })

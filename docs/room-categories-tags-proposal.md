@@ -6,7 +6,7 @@
 
 Add a **pre-defined taxonomy** so viewers can filter the live room browse page by:
 
-- **Category** — exactly one per room (Male, Female, Couples, Trans)
+- **Category** — exactly one per room (Entertainment, Music, Education, Business)
 - **Tags** — zero or more per room, chosen from a curated list
 - **Country of origin** — exactly one per room (ISO country)
 
@@ -35,7 +35,7 @@ This improves browse discovery, room setup consistency, creator defaults, a filt
 | Rule | Detail |
 | --- | --- |
 | Cardinality | **One** category per room |
-| Values (V1) | `MALE`, `FEMALE`, `COUPLES`, `TRANS` |
+| Values (V1) | `BUSINESS`, `MUSIC`, `COMEDY`, `EDUCATION` |
 | Mutability | Editable while room is `DRAFT`; locked once `LIVE` (same as title/thumbnail policy) |
 | Browse filter | **Multi-select** — viewer can pick multiple categories; rooms match if `category IN selected` (OR within category) |
 
@@ -44,7 +44,7 @@ Categories are a **closed enum**, not user-created. New categories require a sch
 Example browse URL:
 
 ```
-/rooms?category=FEMALE&category=COUPLES
+/rooms?category=MUSIC&category=COMEDY
 ```
 
 ### Tags (optional at prepare, recommended at go-live)
@@ -164,10 +164,10 @@ Creators who stream as different personas can change values per room; defaults j
 
 ```prisma
 enum RoomCategory {
-  MALE
-  FEMALE
-  COUPLES
-  TRANS
+  BUSINESS
+  MUSIC
+  COMEDY
+  EDUCATION
 }
 ```
 
@@ -247,7 +247,7 @@ If a tag is deactivated (`isActive: false`):
 
 ```yaml
 RoomTaxonomy:
-  categories: [{ value: FEMALE, label: Female }, ...]
+  categories: [{ value: MUSIC, label: Music }, ...]
   tags: [{ slug, label, group }, ...]          # isActive only
   countries: [{ code: US, name: United States }, ...]  # full ISO list
   popularCountryCodes: [US, GB, CA, ...]       # UI hint only; optional on response
@@ -259,7 +259,7 @@ RoomTaxonomy:
 
 | Param | Type | Notes |
 | --- | --- | --- |
-| `category` | `RoomCategory` | Repeatable; `category=FEMALE&category=COUPLES`; OR semantics |
+| `category` | `RoomCategory` | Repeatable; `category=MUSIC&category=COMEDY`; OR semantics |
 | `country` | `string` | ISO alpha-2; repeatable; OR semantics |
 | `tag` | `string` | Tag slug; repeatable; OR semantics |
 | `q` | `string` | Existing title search |
@@ -271,7 +271,7 @@ RoomTaxonomy:
 ```yaml
 category:
   type: string
-  enum: [MALE, FEMALE, COUPLES, TRANS]
+  enum: [BUSINESS, MUSIC, COMEDY, EDUCATION]
   nullable: true
 countryCode:
   type: string
@@ -380,13 +380,13 @@ Room detail stays at `/rooms/:slug`. Browse filters use **reserved path segments
 | `/rooms/c/female/country/us/t/latina` | Full combined filters |
 | `/rooms?q=synth` | Title search (query param only) |
 
-Implementation: `apps/web/src/lib/roomBrowseRoutes.ts` provides `parseBrowsePath`, `buildBrowsePath`, and `browseFiltersToQuery`. Filter changes call `navigate(buildBrowsePath(...))`. Legacy `?category=FEMALE&country=US` URLs redirect to friendly paths on load.
+Implementation: `apps/web/src/lib/roomBrowseRoutes.ts` provides `parseBrowsePath`, `buildBrowsePath`, and `browseFiltersToQuery`. Filter changes call `navigate(buildBrowsePath(...))`. Legacy `?category=MUSIC&country=US` URLs redirect to friendly paths on load.
 
 API `listRooms` still uses query params (`category`, `country`, `tag`); the web layer maps friendly paths → API query.
 
 ### `RoomsPage` — filter bar
 
-- Category **multi-select** chips (not single tab): e.g. Female + Couples together
+- Category **multi-select** chips (not single tab): e.g. Music + Comedy together
 - Country multi-select: **popular countries first**, full ISO list searchable below
 - Tag multi-select (grouped by `group`, searchable)
 - Persist filter state in friendly URL paths (see above); title search uses `?q=`
@@ -485,7 +485,7 @@ Admin tag CRUD (`GET/POST/PATCH /admin/room-tags`) deferred to V2.
 | Category browse filter | **Multi-select OR** — room has one category; viewer picks many |
 | Country list | **Full ISO** on backend; **curated popular + searchable** in UI |
 | Inactive tags on live rooms | Keep on room; hide from picker and new assignments |
-| Couples category | Content category only in V1 — not a multi-creator room feature |
+| Comedy category | Content category only in V1 — not a multi-creator room feature |
 
 ---
 

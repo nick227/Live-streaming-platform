@@ -2,6 +2,9 @@ import { httpError } from '../lib/errors'
 import { db } from '@streamyolo/db'
 import { encodeCursor, decodeCursor, normalizeLimit } from '../lib/pagination'
 import { CREATOR_INCLUDE } from './RoomService'
+import { LiveKitService } from './LiveKitService'
+
+const liveKitService = new LiveKitService()
 
 export class AdminService {
   // ── Overview ───────────────────────────────────────────────────────────────
@@ -79,6 +82,15 @@ export class AdminService {
         data: { adminUserId: adminId, targetRoomId: roomId, type: 'END_ROOM', reason },
       }),
     ])
+
+    // Clear the creator's live state so their profile reflects the correct status
+    await db.creatorProfile.updateMany({
+      where: { id: room.creatorId, isLive: true },
+      data: { isLive: false, currentRoomId: null },
+    })
+
+    await liveKitService.deleteRoom(room.livekitRoomName)
+
     return updated
   }
 
@@ -583,6 +595,31 @@ export class AdminService {
     return creator
   }
 
+  // ── Categories ────────────────────────────────────────────────────────────
+
+  async listCategories() {
+    return db.roomCategory.findMany({ orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }] })
+  }
+
+  async createCategory(data: { slug: string; label: string; sortOrder?: number }) {
+    const existing = await db.roomCategory.findUnique({ where: { slug: data.slug } })
+    if (existing) throw httpError(409, 'Category slug already exists')
+    return db.roomCategory.create({ data: { slug: data.slug, label: data.label, sortOrder: data.sortOrder ?? 0 } })
+  }
+
+  async updateCategory(categoryId: string, data: { label?: string; sortOrder?: number; isActive?: boolean }) {
+    const cat = await db.roomCategory.findUnique({ where: { id: categoryId } })
+    if (!cat) throw httpError(404, 'Category not found')
+    return db.roomCategory.update({ where: { id: categoryId }, data })
+  }
+
+  async deleteCategory(categoryId: string) {
+    const cat = await db.roomCategory.findUnique({ where: { id: categoryId } })
+    if (!cat) throw httpError(404, 'Category not found')
+    await db.roomCategory.delete({ where: { id: categoryId } })
+    return { ok: true }
+  }
+
   // ── Tags ──────────────────────────────────────────────────────────────────
 
   async listTags() {
@@ -604,7 +641,11 @@ export class AdminService {
   async deleteTag(tagId: string) {
     const tag = await db.roomTag.findUnique({ where: { id: tagId } })
     if (!tag) throw httpError(404, 'Tag not found')
-    await db.roomTag.update({ where: { id: tagId }, data: { isActive: false } })
+    await db.$transaction([
+      db.roomTagAssignment.deleteMany({ where: { tagId } }),
+      db.creatorDefaultRoomTag.deleteMany({ where: { tagId } }),
+      db.roomTag.delete({ where: { id: tagId } }),
+    ])
     return { ok: true }
   }
 

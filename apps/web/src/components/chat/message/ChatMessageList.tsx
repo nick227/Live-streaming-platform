@@ -15,6 +15,7 @@ type ChatMessageListProps = {
   variant?: 'viewer' | 'studio'
   className?: string
   emptyMessage?: string
+  mutedUserIds?: ReadonlySet<string>
   vipUserIds?: ReadonlySet<string>
   moderation?: Required<Pick<ModerationHandlers, 'onUserAction' | 'onDeleteMessage' | 'onPinMessage'>>
 }
@@ -27,11 +28,16 @@ function isVipUser(userId: string | undefined, vipUserIds?: ReadonlySet<string>)
   return Boolean(userId && vipUserIds?.has(userId))
 }
 
+function isMutedUser(userId: string | undefined, mutedUserIds?: ReadonlySet<string>) {
+  return Boolean(userId && mutedUserIds?.has(userId))
+}
+
 export function ChatMessageList({
   messages,
   variant = 'viewer',
   className,
   emptyMessage,
+  mutedUserIds,
   vipUserIds,
   moderation,
 }: ChatMessageListProps) {
@@ -55,6 +61,8 @@ export function ChatMessageList({
           <InlineModerationActions
             userId={event.message.user?.id ?? undefined}
             messageId={event.message.id}
+            isMuted={isMutedUser(event.message.user?.id, mutedUserIds)}
+            isVip={isVipUser(event.message.user?.id, vipUserIds)}
             onUserAction={moderation.onUserAction}
             onDeleteMessage={moderation.onDeleteMessage}
             onPinMessage={moderation.onPinMessage}

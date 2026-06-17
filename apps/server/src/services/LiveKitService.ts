@@ -61,12 +61,14 @@ export class LiveKitService {
       livekitRoomName = room.livekitRoomName
       canPublish = room.creator.userId === userId
       canPublishSources = canPublish
-        ? [
-            TrackSource.CAMERA,
-            TrackSource.MICROPHONE,
-            TrackSource.SCREEN_SHARE,
-            TrackSource.SCREEN_SHARE_AUDIO,
-          ]
+        ? room.mediaMode === 'AUDIO_ONLY'
+          ? [TrackSource.MICROPHONE]
+          : [
+              TrackSource.CAMERA,
+              TrackSource.MICROPHONE,
+              TrackSource.SCREEN_SHARE,
+              TrackSource.SCREEN_SHARE_AUDIO,
+            ]
         : undefined
     } else {
       const session = await db.privateSession.findUnique({
@@ -81,10 +83,10 @@ export class LiveKitService {
       livekitRoomName = session.livekitRoomName
       canPublish = true
       canPublishSources = [TrackSource.MICROPHONE]
-      if (isCreator || session.viewerCamRequired) {
+      if (isCreator || session.viewerCamMode === 'OPTIONAL' || session.viewerCamMode === 'REQUIRED') {
         canPublishSources.push(TrackSource.CAMERA)
       }
-      if (session.screenShareAllowed) {
+      if (isCreator && session.screenShareAllowed) {
         canPublishSources.push(TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO)
       }
     }
@@ -117,6 +119,14 @@ export class LiveKitService {
       await this.getRoomService().deleteRoom(roomName)
     } catch {
       // room may already be gone
+    }
+  }
+
+  async getRoomParticipants(roomName: string) {
+    try {
+      return await this.getRoomService().listParticipants(roomName)
+    } catch {
+      return []
     }
   }
 }

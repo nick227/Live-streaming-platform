@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import { Users } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
-import { categoryEnumToSlug } from '@streamyolo/shared/room-taxonomy'
 
 interface RoomTag {
   slug: string
@@ -54,7 +53,7 @@ export function RoomCard({ room }: RoomCardProps) {
           )}
           {room.category && (
             <span className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded capitalize">
-              {categoryEnumToSlug(room.category as 'MALE' | 'FEMALE' | 'COUPLES' | 'TRANS')}
+              {room.category}
             </span>
           )}
           {room.viewerCount !== undefined && isLive && (

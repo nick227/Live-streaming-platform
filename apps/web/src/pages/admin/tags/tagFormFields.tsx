@@ -59,7 +59,7 @@ export function TagFormPanel<T extends Record<string, unknown>>({
   submitLabel,
 }: TagFormPanelProps<T>) {
   return (
-    <div className="space-y-6 max-w-md">
+    <div className="space-y-6 max-w-md mx-auto">
       <div>
         <h1 className="text-xl font-semibold">{title}</h1>
         {subtitle && <p className="text-sm text-muted-foreground font-mono mt-1">{subtitle}</p>}

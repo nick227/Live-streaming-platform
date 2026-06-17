@@ -19,13 +19,19 @@ const BOOL_OPTIONS = [
   { label: 'Yes', value: 'true' },
 ]
 
+const CAM_OPTIONS = [
+  { label: 'Off', value: 'OFF' },
+  { label: 'Optional', value: 'OPTIONAL' },
+  { label: 'Required', value: 'REQUIRED' },
+]
+
 const schema = z.object({
   displayName: z.string().min(1).max(50),
   username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, hyphens, and underscores allowed').optional(),
   bio: z.string().max(1000).optional().or(z.literal('')),
   privateRateTokensPerMinute: z.string().min(1),
   minPrivateMinutes: z.string().min(1),
-  privateViewerCamRequired: z.enum(['true', 'false']),
+  privateViewerCamMode: z.enum(['OFF', 'OPTIONAL', 'REQUIRED']),
   privateScreenShareAllowed: z.enum(['true', 'false']),
   privateRulesText: z.string().max(2000).optional().or(z.literal('')),
 })
@@ -37,7 +43,7 @@ const fields: FieldConfig[] = [
   { name: 'bio', label: 'Bio', type: 'textarea', voice: true, required: false, rows: 3 },
   { name: 'privateRateTokensPerMinute', label: 'Private Rate (tokens/min)', type: 'select', voice: false, required: true, options: RATE_OPTIONS },
   { name: 'minPrivateMinutes', label: 'Min Private Minutes', type: 'select', voice: false, required: true, options: MINUTE_OPTIONS },
-  { name: 'privateViewerCamRequired', label: 'Viewer Cam Required', type: 'select', voice: false, required: true, options: BOOL_OPTIONS },
+  { name: 'privateViewerCamMode', label: 'Viewer Cam Mode', type: 'select', voice: false, required: true, options: CAM_OPTIONS },
   { name: 'privateScreenShareAllowed', label: 'Screen Share Allowed', type: 'select', voice: false, required: true, options: BOOL_OPTIONS },
   { name: 'privateRulesText', label: 'Private Rules', type: 'textarea', voice: true, required: false, rows: 3 },
 ]
@@ -63,7 +69,7 @@ export function ProfileSettingsForm({ defaults }: ProfileSettingsFormProps) {
               bio: formData.bio || undefined,
               privateRateTokensPerMinute: Number(formData.privateRateTokensPerMinute),
               minPrivateMinutes: Number(formData.minPrivateMinutes),
-              privateViewerCamRequired: formData.privateViewerCamRequired === 'true',
+              privateViewerCamMode: formData.privateViewerCamMode,
               privateScreenShareAllowed: formData.privateScreenShareAllowed === 'true',
               privateRulesText: formData.privateRulesText || undefined,
             }),

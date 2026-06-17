@@ -14,7 +14,6 @@ import {
   parseBrowsePath,
   type BrowseFilters,
 } from '@/lib/roomBrowseRoutes'
-import type { RoomCategory } from '@streamyolo/shared/room-taxonomy'
 import { POPULAR_COUNTRY_CODES } from '@streamyolo/shared/iso-countries'
 import { cn } from '@/lib/utils'
 
@@ -55,7 +54,7 @@ export function RoomsPage() {
     navigate(buildBrowsePath(next))
   }
 
-  function toggleCategory(value: RoomCategory) {
+  function toggleCategory(value: string) {
     applyFilters({ ...filters, categories: toggleValue(filters.categories, value) })
   }
 

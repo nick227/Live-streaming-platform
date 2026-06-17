@@ -327,7 +327,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: true,
         privateRateTokensPerMinute: 60,
         minPrivateMinutes: 5,
-        privateViewerCamRequired: false,
+        privateViewerCamMode: 'OPTIONAL',
         privateScreenShareAllowed: true,
         privateRulesText: 'Be kind, keep requests platform-safe, and confirm custom requests in chat first.',
         payoutStatus: 'ENABLED',
@@ -340,7 +340,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: true,
         privateRateTokensPerMinute: 60,
         minPrivateMinutes: 5,
-        privateViewerCamRequired: false,
+        privateViewerCamMode: 'OPTIONAL',
         privateScreenShareAllowed: true,
         privateRulesText: 'Be kind, keep requests platform-safe, and confirm custom requests in chat first.',
         payoutStatus: 'ENABLED',
@@ -355,7 +355,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: true,
         privateRateTokensPerMinute: 45,
         minPrivateMinutes: 3,
-        privateViewerCamRequired: true,
+        privateViewerCamMode: 'REQUIRED',
         privateScreenShareAllowed: false,
         privateRulesText: 'Viewer cam required for private sessions. No recording or reposting.',
         payoutStatus: 'ENABLED',
@@ -368,7 +368,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: true,
         privateRateTokensPerMinute: 45,
         minPrivateMinutes: 3,
-        privateViewerCamRequired: true,
+        privateViewerCamMode: 'REQUIRED',
         privateScreenShareAllowed: false,
         privateRulesText: 'Viewer cam required for private sessions. No recording or reposting.',
         payoutStatus: 'ENABLED',
@@ -383,7 +383,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: false,
         privateRateTokensPerMinute: 35,
         minPrivateMinutes: 4,
-        privateViewerCamRequired: false,
+        privateViewerCamMode: 'OPTIONAL',
         privateScreenShareAllowed: false,
         privateRulesText: 'Respectful chat only. Private requests are reviewed before acceptance.',
         payoutStatus: 'DISABLED',
@@ -396,7 +396,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: false,
         privateRateTokensPerMinute: 35,
         minPrivateMinutes: 4,
-        privateViewerCamRequired: false,
+        privateViewerCamMode: 'OPTIONAL',
         privateScreenShareAllowed: false,
         privateRulesText: 'Respectful chat only. Private requests are reviewed before acceptance.',
         payoutStatus: 'DISABLED',
@@ -411,7 +411,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: false,
         privateRateTokensPerMinute: 0,
         minPrivateMinutes: 1,
-        privateViewerCamRequired: false,
+        privateViewerCamMode: 'OPTIONAL',
         privateScreenShareAllowed: false,
         privateRulesText: null,
         payoutStatus: 'DISABLED',
@@ -424,7 +424,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: false,
         privateRateTokensPerMinute: 0,
         minPrivateMinutes: 1,
-        privateViewerCamRequired: false,
+        privateViewerCamMode: 'OPTIONAL',
         privateScreenShareAllowed: false,
         privateRulesText: null,
         payoutStatus: 'DISABLED',
@@ -439,7 +439,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: false,
         privateRateTokensPerMinute: 70,
         minPrivateMinutes: 5,
-        privateViewerCamRequired: false,
+        privateViewerCamMode: 'OPTIONAL',
         privateScreenShareAllowed: false,
         privateRulesText: 'Historical rules captured before suspension.',
         payoutStatus: 'HOLD',
@@ -452,7 +452,7 @@ async function seedCreatorProfiles(users: Awaited<ReturnType<typeof seedUsers>>)
         isLive: false,
         privateRateTokensPerMinute: 70,
         minPrivateMinutes: 5,
-        privateViewerCamRequired: false,
+        privateViewerCamMode: 'OPTIONAL',
         privateScreenShareAllowed: false,
         privateRulesText: 'Historical rules captured before suspension.',
         payoutStatus: 'HOLD',
@@ -495,6 +495,22 @@ async function seedMedia(users: Awaited<ReturnType<typeof seedUsers>>, profiles:
   })
 
   return created
+}
+
+async function seedRoomCategories() {
+  const categories = [
+    { slug: 'education', label: 'Education', sortOrder: 0 },
+    { slug: 'music', label: 'Music', sortOrder: 1 },
+    { slug: 'business', label: 'Business', sortOrder: 2 },
+    { slug: 'entertainment', label: 'Entertainment', sortOrder: 3 },
+  ]
+  for (const cat of categories) {
+    await db.roomCategory.upsert({
+      where: { slug: cat.slug },
+      update: { label: cat.label, sortOrder: cat.sortOrder, isActive: true },
+      create: cat,
+    })
+  }
 }
 
 async function seedRoomTags() {
@@ -551,11 +567,11 @@ async function seedRoomTaxonomy(
 ) {
   await db.creatorProfile.update({
     where: { id: profiles.luna.id },
-    data: { defaultRoomCategory: 'FEMALE', defaultCountryCode: 'US' },
+    data: { defaultRoomCategory: 'female', defaultCountryCode: 'US' },
   })
   await db.creatorProfile.update({
     where: { id: profiles.nova.id },
-    data: { defaultRoomCategory: 'COUPLES', defaultCountryCode: 'GB' },
+    data: { defaultRoomCategory: 'couples', defaultCountryCode: 'GB' },
   })
 
   await db.creatorDefaultRoomTag.createMany({
@@ -571,11 +587,11 @@ async function seedRoomTaxonomy(
 
   await db.room.update({
     where: { id: rooms.lunaLive.id },
-    data: { category: 'FEMALE', countryCode: 'US' },
+    data: { category: 'female', countryCode: 'US' },
   })
   await db.room.update({
     where: { id: rooms.novaLive.id },
-    data: { category: 'COUPLES', countryCode: 'GB' },
+    data: { category: 'couples', countryCode: 'GB' },
   })
 
   await db.roomTagAssignment.createMany({
@@ -1048,7 +1064,7 @@ async function seedPrivateSessions(
       status: 'REQUESTED',
       rateTokensPerMinute: 60,
       minMinutes: 5,
-      viewerCamRequired: false,
+      viewerCamMode: 'OPTIONAL',
       screenShareAllowed: true,
       rulesText: 'Be kind, keep requests platform-safe, and confirm custom requests in chat first.',
       reservedTokens: 300,
@@ -1070,7 +1086,7 @@ async function seedPrivateSessions(
       status: 'ACCEPTED',
       rateTokensPerMinute: 45,
       minMinutes: 3,
-      viewerCamRequired: true,
+      viewerCamMode: 'REQUIRED',
       screenShareAllowed: false,
       rulesText: 'Viewer cam required for private sessions. No recording or reposting.',
       reservedTokens: 135,
@@ -1092,7 +1108,7 @@ async function seedPrivateSessions(
       status: 'ACTIVE',
       rateTokensPerMinute: 60,
       minMinutes: 5,
-      viewerCamRequired: false,
+      viewerCamMode: 'OPTIONAL',
       screenShareAllowed: true,
       rulesText: 'Be kind, keep requests platform-safe, and confirm custom requests in chat first.',
       reservedTokens: 300,
@@ -1114,7 +1130,7 @@ async function seedPrivateSessions(
       status: 'ENDED',
       rateTokensPerMinute: 60,
       minMinutes: 5,
-      viewerCamRequired: false,
+      viewerCamMode: 'OPTIONAL',
       screenShareAllowed: true,
       rulesText: 'Be kind, keep requests platform-safe, and confirm custom requests in chat first.',
       reservedTokens: 600,
@@ -1136,7 +1152,7 @@ async function seedPrivateSessions(
       status: 'DECLINED',
       rateTokensPerMinute: 45,
       minMinutes: 3,
-      viewerCamRequired: true,
+      viewerCamMode: 'REQUIRED',
       screenShareAllowed: false,
       rulesText: 'Viewer cam required for private sessions. No recording or reposting.',
       reservedTokens: 135,
@@ -1158,7 +1174,7 @@ async function seedPrivateSessions(
       status: 'FORCE_ENDED',
       rateTokensPerMinute: 70,
       minMinutes: 5,
-      viewerCamRequired: false,
+      viewerCamMode: 'OPTIONAL',
       screenShareAllowed: false,
       rulesText: 'Historical rules captured before suspension.',
       reservedTokens: 350,
@@ -1285,6 +1301,7 @@ async function main() {
   const wallets = await seedWallets(users)
   const profiles = await seedCreatorProfiles(users)
   const media = await seedMedia(users, profiles)
+  await seedRoomCategories()
   const roomTags = await seedRoomTags()
   const rooms = await seedRooms(profiles, media)
   await seedRoomTaxonomy(profiles, rooms, roomTags)

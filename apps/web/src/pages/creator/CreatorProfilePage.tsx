@@ -63,7 +63,7 @@ export function CreatorProfilePage() {
     bio: profile?.bio ?? '',
     privateRateTokensPerMinute: String(profile?.privateRateTokensPerMinute || 6),
     minPrivateMinutes: String(profile?.minPrivateMinutes || 1),
-    privateViewerCamRequired: profile?.privateViewerCamRequired ? 'true' : 'false',
+    privateViewerCamMode: profile?.privateViewerCamMode || 'OPTIONAL',
     privateScreenShareAllowed: profile?.privateScreenShareAllowed ? 'true' : 'false',
     privateRulesText: profile?.privateRulesText ?? '',
   }

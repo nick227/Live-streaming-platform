@@ -5,6 +5,7 @@ import { ChatShell } from '../primitives/ChatShell'
 import { ChatStatusBanner } from '../primitives/ChatStatusBanner'
 import { PinnedMessageBanner } from '../primitives/PinnedMessageBanner'
 import type { ChatItem, ChatMessageDto } from '../model/types'
+import { VIEWER_QUICK_MESSAGES } from '../composer/builtIns'
 
 export function ViewerChatPanel({
   className,
@@ -55,6 +56,7 @@ export function ViewerChatPanel({
           sending={sending}
           slowModeSeconds={slowModeSeconds}
           customEmotes={customEmotes}
+          quickMessages={VIEWER_QUICK_MESSAGES}
           onSend={onSend}
         />
       }

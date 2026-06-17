@@ -115,7 +115,7 @@ export function AdminCreatorPage() {
             <dt className="text-muted-foreground">Min minutes</dt>
             <dd>{creator.minPrivateMinutes}</dd>
             <dt className="text-muted-foreground">Viewer cam required</dt>
-            <dd>{creator.privateViewerCamRequired ? 'Yes' : 'No'}</dd>
+            <dd>{creator.privateViewerCamMode}</dd>
             <dt className="text-muted-foreground">Screen share allowed</dt>
             <dd>{creator.privateScreenShareAllowed ? 'Yes' : 'No'}</dd>
           </dl>

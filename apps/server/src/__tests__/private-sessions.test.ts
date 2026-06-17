@@ -23,6 +23,22 @@ describe('requestPrivateSession', () => {
     expect(res.statusCode).toBe(201)
     await validateResponse('requestPrivateSession', 201, res.json())
   })
+
+  it('accepts the documented request note body', async () => {
+    await createActiveCreator(testOtherUserId)
+    const room = await createLiveRoom(testOtherUserId)
+    await createWallet(testUserId, 1000)
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/rooms/${room.id}/private-sessions/request`,
+      headers: asAuth(testUserId),
+      payload: { note: 'Would love a private session.' },
+    })
+
+    expect(res.statusCode).toBe(201)
+    await validateResponse('requestPrivateSession', 201, res.json())
+  })
 })
 
 describe('acceptPrivateSession', () => {

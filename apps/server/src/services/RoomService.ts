@@ -1,11 +1,4 @@
-import type { RoomCategory } from '@streamyolo/shared/room-taxonomy'
-import {
-  categoryEnumToSlug,
-  isRoomCategory,
-  MAX_ROOM_TAGS,
-  ROOM_CATEGORIES,
-  ROOM_CATEGORY_LABELS,
-} from '@streamyolo/shared/room-taxonomy'
+import { MAX_ROOM_TAGS } from '@streamyolo/shared/room-taxonomy'
 import {
   getCountryName,
   ISO_COUNTRIES,
@@ -32,7 +25,7 @@ export const CREATOR_INCLUDE = {
     avatarMediaId: true,
     privateRateTokensPerMinute: true,
     minPrivateMinutes: true,
-    privateViewerCamRequired: true,
+    privateViewerCamMode: true,
     privateScreenShareAllowed: true,
     user: {
       select: {
@@ -69,30 +62,35 @@ export type PrepareRoomData = {
   countryCode?: string
   tagSlugs?: string[]
   saveAsDefaults?: boolean
+  mediaMode?: 'VIDEO' | 'AUDIO_ONLY'
 }
 
 export class RoomService {
   async getTaxonomy() {
-    const tags = await db.roomTag.findMany({
-      where: { isActive: true },
-      orderBy: [{ group: 'asc' }, { sortOrder: 'asc' }, { label: 'asc' }],
-    })
+    const STATIC_CATEGORIES = [
+      { slug: 'education', label: 'Education' },
+      { slug: 'music', label: 'Music' },
+      { slug: 'business', label: 'Business' },
+      { slug: 'entertainment', label: 'Entertainment' },
+    ]
+
+    const [dbCategories, tags] = await Promise.all([
+      db.roomCategory
+        .findMany({ where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }] })
+        .catch(() => null),
+      db.roomTag.findMany({
+        where: { isActive: true },
+        orderBy: [{ group: 'asc' }, { sortOrder: 'asc' }, { label: 'asc' }],
+      }),
+    ])
+
+    const categories: Array<{ slug: string; label: string }> =
+      Array.isArray(dbCategories) && dbCategories.length > 0 ? dbCategories : STATIC_CATEGORIES
 
     return {
-      categories: ROOM_CATEGORIES.map((value) => ({
-        value,
-        label: ROOM_CATEGORY_LABELS[value],
-        slug: categoryEnumToSlug(value),
-      })),
-      tags: tags.map((tag) => ({
-        slug: tag.slug,
-        label: tag.label,
-        group: tag.group,
-      })),
-      countries: ISO_COUNTRIES.map((country) => ({
-        code: country.code,
-        name: country.name,
-      })),
+      categories: categories.map((c) => ({ value: c.slug, label: c.label, slug: c.slug })),
+      tags: tags.map((tag) => ({ slug: tag.slug, label: tag.label, group: tag.group })),
+      countries: ISO_COUNTRIES.map((country) => ({ code: country.code, name: country.name })),
       popularCountryCodes: [...POPULAR_COUNTRY_CODES],
     }
   }
@@ -138,14 +136,14 @@ export class RoomService {
   }) {
     const limit = normalizeLimit(params.limit)
     const cursorPayload = decodeCursor(params.cursor)
-    const categories = params.categories?.filter(isRoomCategory) ?? []
+    const categories = params.categories ?? []
 
     const rooms = await db.room.findMany({
       where: {
         status: (params.status as 'LIVE' | 'ENDED' | undefined) ?? 'LIVE',
         visibility: 'PUBLIC',
         ...(params.q ? { title: { contains: params.q } } : {}),
-        ...(categories.length ? { category: { in: categories as RoomCategory[] } } : {}),
+        ...(categories.length ? { category: { in: categories } } : {}),
         ...(params.countryCodes?.length
           ? { countryCode: { in: params.countryCodes.map(normalizeCountryCode) } }
           : {}),
@@ -202,7 +200,7 @@ export class RoomService {
       await db.user.update({ where: { id: creatorUserId }, data: { role: 'CREATOR' } })
     }
 
-    const category = this._resolveCategory(data.category, creator.defaultRoomCategory)
+    const category = await this._resolveCategory(data.category, creator.defaultRoomCategory)
     const countryCode = this._resolveCountryCode(data.countryCode, creator.defaultCountryCode)
     const tagSlugs =
       data.tagSlugs !== undefined
@@ -222,6 +220,7 @@ export class RoomService {
           visibility: (data.visibility as 'PUBLIC' | 'UNLISTED' | undefined) ?? 'PUBLIC',
           thumbnailMediaId: data.thumbnailMediaId,
           coverMediaId: data.coverMediaId,
+          mediaMode: data.mediaMode ?? 'VIDEO',
           category,
           countryCode,
           tags: {
@@ -262,12 +261,19 @@ export class RoomService {
     const updateData: any = {}
     if (data.title !== undefined) updateData.title = data.title
     if (data.visibility !== undefined) updateData.visibility = data.visibility
+    if (data.mediaMode !== undefined) updateData.mediaMode = data.mediaMode
     if (data.thumbnailMediaId !== undefined) updateData.thumbnailMediaId = data.thumbnailMediaId
     if (data.coverMediaId !== undefined) updateData.coverMediaId = data.coverMediaId
     if (data.category !== undefined) {
-      updateData.category = this._resolveCategory(data.category, existing.category)
+      if (existing.status === 'LIVE' && data.category !== existing.category) {
+        throw httpError(400, 'Cannot change category while room is live')
+      }
+      updateData.category = await this._resolveCategory(data.category, existing.category)
     }
     if (data.countryCode !== undefined) {
+      if (existing.status === 'LIVE' && data.countryCode !== existing.countryCode) {
+        throw httpError(400, 'Cannot change country while room is live')
+      }
       updateData.countryCode = this._resolveCountryCode(data.countryCode, existing.countryCode)
     }
 
@@ -319,6 +325,15 @@ export class RoomService {
 
   async endRoom(creatorUserId: string, roomId: string) {
     const room = await this._assertCreatorOwnsRoom(creatorUserId, roomId)
+
+    if (room.status === 'ENDED') {
+      // Idempotent: ensure profile is consistent even if somehow still marked live
+      await db.creatorProfile.updateMany({
+        where: { id: room.creatorId, isLive: true },
+        data: { isLive: false, currentRoomId: null },
+      })
+      return db.room.findUniqueOrThrow({ where: { id: roomId }, include: ROOM_INCLUDES })
+    }
 
     const openSessions = await db.privateSession.findMany({
       where: { publicRoomId: roomId, status: { in: ['REQUESTED', 'ACCEPTED', 'ACTIVE'] } },
@@ -372,9 +387,10 @@ export class RoomService {
     return { rooms: rooms.map(formatRoom), meta: { hasMore, nextCursor } }
   }
 
-  private _resolveCategory(requested: string | undefined, fallback: RoomCategory | null) {
+  private async _resolveCategory(requested: string | undefined, fallback: string | null) {
     if (requested !== undefined) {
-      if (!isRoomCategory(requested)) throw httpError(400, 'Invalid room category')
+      const cat = await db.roomCategory.findUnique({ where: { slug: requested, isActive: true } })
+      if (!cat) throw httpError(400, 'Invalid room category')
       return requested
     }
     return fallback ?? null
@@ -413,7 +429,7 @@ export class RoomService {
     creatorId: string
     thumbnailMediaId: string | null
     title: string
-    category: RoomCategory | null
+    category: string | null
     countryCode: string | null
   }) {
     const missing: string[] = []
@@ -421,7 +437,7 @@ export class RoomService {
     if (!creator) return ['CREATOR_PROFILE_MISSING']
 
     if (creator.status !== 'ACTIVE') missing.push('CREATOR_NOT_APPROVED')
-    if (!room.thumbnailMediaId) missing.push('ROOM_THUMBNAIL')
+    if (room.mediaMode === 'VIDEO' && !room.thumbnailMediaId) missing.push('ROOM_THUMBNAIL')
     if (!room.title?.trim()) missing.push('ROOM_TITLE')
     if (!room.category) missing.push('ROOM_CATEGORY')
     if (!room.countryCode) missing.push('ROOM_COUNTRY')
@@ -453,9 +469,10 @@ type FormattableRoom = {
   title: string
   status: string
   visibility: string
+  mediaMode: string
   thumbnailMediaId: string | null
   viewerCount: number
-  category?: RoomCategory | null
+  category?: string | null
   countryCode?: string | null
   startedAt: Date | null
   createdAt: Date
@@ -467,7 +484,7 @@ type FormattableRoom = {
     avatarMediaId?: string | null
     privateRateTokensPerMinute?: number
     minPrivateMinutes?: number
-    privateViewerCamRequired?: boolean
+    privateViewerCamMode?: 'OFF' | 'OPTIONAL' | 'REQUIRED'
     privateScreenShareAllowed?: boolean
     user?: {
       id?: string
@@ -494,6 +511,7 @@ export function formatRoom(room: FormattableRoom) {
     title: room.title,
     status: room.status,
     visibility: room.visibility,
+    mediaMode: room.mediaMode,
     category: room.category ?? null,
     countryCode: room.countryCode ?? null,
     countryName: room.countryCode ? getCountryName(room.countryCode) ?? null : null,
@@ -508,7 +526,7 @@ export function formatRoom(room: FormattableRoom) {
     privateAvailable: (room.creator?.privateRateTokensPerMinute ?? 0) > 0,
     privateRateTokensPerMinute: room.creator?.privateRateTokensPerMinute ?? null,
     minPrivateMinutes: room.creator?.minPrivateMinutes ?? 1,
-    privateViewerCamRequired: room.creator?.privateViewerCamRequired ?? false,
+    privateViewerCamMode: room.creator?.privateViewerCamMode ?? 'OPTIONAL',
     privateScreenShareAllowed: room.creator?.privateScreenShareAllowed ?? false,
     startedAt: room.startedAt?.toISOString() ?? null,
     createdAt: room.createdAt.toISOString(),

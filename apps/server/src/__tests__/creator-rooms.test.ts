@@ -25,7 +25,7 @@ describe('prepareRoom', () => {
       payload: {
         title: 'New Stream',
         thumbnailMediaId: media.id,
-        category: 'FEMALE',
+        category: 'MUSIC',
         countryCode: 'US',
         tagSlugs: ['gaming'],
       },
@@ -55,7 +55,7 @@ describe('goLive', () => {
       }
     })
     const room = await db.room.create({
-      data: { creatorId: creator.id, title: 'Prepared Room', livekitRoomName: 'room-123', thumbnailMediaId: media2.id, category: 'FEMALE', countryCode: 'US' },
+      data: { creatorId: creator.id, title: 'Prepared Room', livekitRoomName: 'room-123', thumbnailMediaId: media2.id, category: 'MUSIC', countryCode: 'US' },
     })
 
     const res = await app.inject({

@@ -37,7 +37,7 @@ describe.skipIf(!LK_URL || !LK_KEY || !LK_SECRET)(
           creatorId: creator.id,
           title: 'LiveKit Test Room',
           livekitRoomName: testRoomName,
-          category: 'FEMALE',
+          category: 'MUSIC',
           countryCode: 'US',
         },
       })

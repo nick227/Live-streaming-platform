@@ -147,11 +147,15 @@ export function attachSocketIO(server: FastifyInstance) {
           ack?.({ ok: false, error: allowed.error })
           return
         }
+        const room = await db.room.findUnique({
+          where: { id: roomId },
+          select: { creator: { select: { userId: true } } },
+        })
         const msg = await db.chatMessage.create({
           data: {
             roomId,
             userId,
-            type: 'USER_MESSAGE',
+            type: room?.creator.userId === userId ? 'CREATOR_MESSAGE' : 'USER_MESSAGE',
             body,
           },
           include: { user: { select: { id: true, displayName: true } } },

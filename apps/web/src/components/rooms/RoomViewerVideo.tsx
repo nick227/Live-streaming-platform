@@ -88,7 +88,7 @@ export function RoomViewerVideo({
     <div className="relative w-full h-full">
       <LiveKitRoom
         video={false}
-        audio={true}
+        audio={false}
         token={credentials.token}
         serverUrl={credentials.url}
         className="w-full h-full bg-black"
